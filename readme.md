@@ -32,5 +32,6 @@ PGHtml is a command line utility that creates HTML, JS, JSON and other types of 
 
 ### [Documentation](http://pghtml.org/en/documentation/) ### 
 ### [Example](http://pghtml.org/en/#example) ### 
+### [Download](http://pghtml.org/en/download/) ### 
 
 
