@@ -18,7 +18,7 @@ PGHtml is a command line utility that creates HTML, JS, JSON and other types of 
 
 *   **\<pghtml-include\>** - file contents
 
-*   **${[variable]}** - variable value
+*   **${[variable]}** - variable value 
 
 
 ### Important qualities ###
