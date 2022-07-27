@@ -1,3 +1,6 @@
+#ifndef UTIL_STR_H_
+#define UTIL_STR_H_
+
 #ifndef NULL
 #define NULL ((void *)0)
 #endif
@@ -13,3 +16,5 @@ typedef struct
 	char names [ARRAY_SIZE_MAX][ARRAY_ELEMENT_SIZE_MAX];
 	char values[ARRAY_SIZE_MAX][ARRAY_ELEMENT_SIZE_MAX];
 } VARS;
+
+#endif /* UTIL_STR_H_ */

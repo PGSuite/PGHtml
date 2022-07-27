@@ -4,6 +4,7 @@
 
 #include "globals.h"
 
+#include "util/util-str.h"
 #include "util/util-file.h"
 
 char HELP[] =

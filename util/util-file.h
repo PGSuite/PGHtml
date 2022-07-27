@@ -1,3 +1,6 @@
+#ifndef UTIL_FILE_H_
+#define UTIL_FILE_H_
+
 #ifdef _WIN32
 #define FILE_SEPARATOR "\\"
 #define PATH_SEPARATOR ";"
@@ -15,3 +18,5 @@ typedef struct
 	int	 size;
 	char *body;
 } FILE_BODY;
+
+#endif /* UTIL_FILE_H_ */
