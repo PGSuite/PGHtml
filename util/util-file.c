@@ -129,5 +129,5 @@ int file_filename(char *filename, int filename_size, char *filepath) {
 		if (filepath[--i]==FILE_SEPARATOR[0]) break;
 	if (i<0)
 		return str_copy(filename, filename, filepath);
-	return str_substr(filename, filename, filepath, i+1, strlen(filepath)-i-1);
+	return str_substr(filename, filename_size, filepath, i+1, strlen(filepath)-i-1);
 }
