@@ -5,7 +5,7 @@
 #include "util-file.h"
 
 int file_read(char *path, FILE_BODY *file_body) {
-    FILE * file = fopen(path,"r");
+    FILE * file = fopen(path,"rb");
 	if(file==NULL) {
 		stderr_printf(8, path);
 		return 1;
@@ -62,7 +62,7 @@ int file_compare(char *path, FILE_BODY *file_new) {
 
 
 int file_write(char *path, FILE_BODY *file_body) {
-    FILE * file = fopen(path,"w");
+    FILE * file = fopen(path,"wb");
 	if(file==NULL) {
 		stderr_printf(8, path);
 	    return 1;
@@ -93,6 +93,10 @@ int file_add(FILE_BODY *file_body, char *source, int pos_begin, int pos_end) {
 	for (int i=pos_begin; i<=pos_end; i++)
 		file_body->body[file_body->size++] = source[i];
 	return 0;
+}
+
+int file_add_eol(FILE_BODY *file_body) {
+	return file_add(file_body, EOL, 0, EOL_LEN-1);
 }
 
 int file_body_empty(FILE_BODY *filebody) {

@@ -148,12 +148,17 @@ int process_pg_sql(FILE_BODY *file) {
         }
 		int row_count = PQntuples(pg_result);
 		int column_count = PQnfields(pg_result);
-        for(int i=0; i<row_count; i++)
+        for(int i=0; i<row_count; i++) {
+        	if (i>0 && file_add_eol(&file_new))
+        		return 1;
         	for(int j=0; j<column_count; j++) {
+            	if (j>0 && file_add(&file_new, " ", 0, 0))
+            		return 1;
 				char *value = PQgetvalue(pg_result, i, j);
 				if (file_add(&file_new, value, 0, strlen(value)-1))
 					return 1;
 	       	}
+        }
         PQclear(pg_result);
 	}
 	free(file->body);
