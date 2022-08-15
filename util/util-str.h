@@ -7,14 +7,22 @@
 
 #define STR_SIZE_MAX 1024
 
-#define ARRAY_SIZE_MAX         30
-#define ARRAY_ELEMENT_SIZE_MAX 200
+#define STR_COLLECTION_SIZE_MAX        30
+#define STR_COLLECTION_KEY_SIZE_MAX    50
+#define STR_COLLECTION_VALUE_SIZE_MAX 200
 
 typedef struct
 {
 	int	 size;
-	char names [ARRAY_SIZE_MAX][ARRAY_ELEMENT_SIZE_MAX];
-	char values[ARRAY_SIZE_MAX][ARRAY_ELEMENT_SIZE_MAX];
-} VARS;
+	char keys  [STR_COLLECTION_SIZE_MAX][STR_COLLECTION_KEY_SIZE_MAX];
+	char values[STR_COLLECTION_SIZE_MAX][STR_COLLECTION_VALUE_SIZE_MAX];
+} STR_MAP;
+
+
+typedef struct
+{
+	int	 size;
+	char values[STR_COLLECTION_SIZE_MAX][STR_COLLECTION_VALUE_SIZE_MAX];
+} STR_LIST;
 
 #endif /* UTIL_STR_H_ */

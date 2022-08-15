@@ -23,7 +23,7 @@ int str_substr(char *dest, int dest_size, char *source, int pos, int len) {
 		return 0;
 	}
 	if (len>=dest_size) {
-		stderr_printf(5, dest_size, len+1);
+		log_stderr_printf(5, dest_size, len+1);
 		return 1;
 	}
 	for(int i=0; i<len; i++) {
@@ -36,7 +36,7 @@ int str_substr(char *dest, int dest_size, char *source, int pos, int len) {
 int str_copy(char *dest, int dest_size, char *source) {
 	int source_len = strlen(source);
 	if ( source_len>=dest_size ) {
-		stderr_printf(5, dest_size, source_len+1);
+		log_stderr_printf(5, dest_size, source_len+1);
 		return 1;
 	}
 	for(int i=0; i<=source_len; i++) {
@@ -49,7 +49,7 @@ int str_add(char *dest, int dest_size, char *source) {
 	int dest_len = strlen(dest);
 	int source_len = strlen(source);
 	if ( (dest_len+source_len)>=dest_size ) {
-		stderr_printf(5, dest_size, dest_len+source_len+1);
+		log_stderr_printf(5, dest_size, dest_len+source_len+1);
 		return 1;
 	}
 	for(int i=0; i<=source_len; i++) {
@@ -74,7 +74,7 @@ int str_add_n(char *dest, int dest_size, int n, ...) {
 
 int str_rtrim(char *dest, int dest_size, int len) {
 	if (len>=dest_size) {
-		stderr_printf(5, dest_size, len+1);
+		log_stderr_printf(5, dest_size, len+1);
 		return 1;
 	}
 	int i = strlen(dest);
@@ -85,76 +85,103 @@ int str_rtrim(char *dest, int dest_size, int len) {
     return 0;
 }
 
-int str_tag_attributes(char *tag, VARS *vars) {
+int str_tag_attributes(char *tag, STR_MAP *attributes) {
 	int pos_begin,pos_end;
 	int tag_len = strlen(tag);
-	int tag_attributes_size_max = sizeof(vars->names)/sizeof(vars->names[0]);
-	vars->size = 0;
+	int tag_attributes_size_max = sizeof(attributes->keys)/sizeof(attributes->keys[0]);
+	attributes->size = 0;
 	for(int pos=0; pos<tag_len; pos++) {
 		if (tag[pos]=='=') {
-			if (vars->size==tag_attributes_size_max) {
-				stderr_printf(6, tag);
+			if (attributes->size==tag_attributes_size_max) {
+				log_stderr_printf(6, tag);
 				return 1;
 			}
 			for(pos_end = pos-1; pos_end>0 && (tag[pos_end]==' ' || tag[pos_end]=='\t');  pos_end--);
 			for(pos_begin = pos_end-1; pos_begin>0 && tag[pos_begin]!=' ' && tag[pos_begin]!='\t';  pos_begin--);
 			if (pos_begin==0 || pos_end==0) {
-				stderr_printf(7, pos, tag);
+				log_stderr_printf(7, pos, tag);
 				return 1;
 			}
 			pos_begin++;
-			if (str_substr(vars->names[vars->size], sizeof(vars->names[0]), tag, pos_begin, pos_end-pos_begin+1))
+			if (str_substr(attributes->keys[attributes->size], sizeof(attributes->keys[0]), tag, pos_begin, pos_end-pos_begin+1))
 				return 1;
 			for(pos_begin = pos+1; pos_begin<tag_len && (tag[pos_begin]==' ' || tag[pos_begin]=='\t');  pos_begin++);
 			if (pos_begin==tag_len || (tag[pos_begin]!='"' && tag[pos_begin]!='\'')  ) {
-				stderr_printf(7, pos, tag);
+				log_stderr_printf(7, pos, tag);
 				return 1;
 			}
 			for(pos_end = pos_begin+1; pos_end<tag_len && tag[pos_end]!=tag[pos_begin]; pos_end++);
 			if (pos_end==tag_len) {
-				stderr_printf(7, pos, tag);
+				log_stderr_printf(7, pos, tag);
 				return 1;
 			}
-			if (str_substr(vars->values[vars->size], sizeof(vars->values[0]), tag, pos_begin+1, pos_end-pos_begin-1))
+			if (str_substr(attributes->values[attributes->size], sizeof(attributes->values[0]), tag, pos_begin+1, pos_end-pos_begin-1))
 				return 1;
-			vars->size++;
+			attributes->size++;
 		}
 	}
 	return 0;
 }
 
-int str_vars_add(VARS *vars, char *name, char *value) {
-	if (str_substr(vars->names[vars->size], sizeof(vars->names[0]), name, 0, strlen(name)))
+void str_map_clear(STR_MAP *map) {
+	map->size = 0;
+}
+
+int str_map_index(STR_MAP *map, char *key) {
+	for (int i=0; i<map->size; i++)
+		if (strcmp(map->keys[i], key)==0) return i;
+	return -1;
+}
+
+int str_map_put(STR_MAP *map, char *key, char *value) {
+	int index = str_map_index(map, key);
+	if (index==-1) {
+		if (map->size>=STR_COLLECTION_SIZE_MAX) {
+			log_stderr_printf(24, STR_COLLECTION_SIZE_MAX, key, value);
+			return 1;
+		}
+		index = map->size++;
+	}
+	if (str_substr(map->keys[index], sizeof(map->keys[0]), key, 0, strlen(key)))
 		return 1;
-	if (str_substr(vars->values[vars->size], sizeof(vars->values[0]), value, 0, strlen(value)))
+	if (str_substr(map->values[index], sizeof(map->values[0]), value, 0, strlen(value)))
 		return 1;
-	vars->size++;
 	return 0;
 }
 
-int str_split(char array[ARRAY_SIZE_MAX][ARRAY_ELEMENT_SIZE_MAX], int *array_size, char *list, char delimeter) {
-	int list_len = strlen(list);
-	int element_index = 0;
-	int element_size = 0;
-	array[element_index][element_size]=0;
-	for (int i=0; i<list_len; i++) {
-		if (list[i]==delimeter) {
-			if (element_index>=ARRAY_SIZE_MAX) {
-				stderr_printf(20, ARRAY_SIZE_MAX, list);
-				return 1;
-			}
-			element_index++;
-			element_size=0;
-			array[element_index][element_size]=0;
+void str_list_clear(STR_LIST *list) {
+	list->size = 0;
+}
+
+int str_list_add(STR_LIST *list, char *value) {
+	if (list->size>=STR_COLLECTION_SIZE_MAX) {
+		log_stderr_printf(20, STR_COLLECTION_SIZE_MAX, value);
+		return 1;
+	}
+	if (str_substr(list->values[list->size], sizeof(list->values[0]), value, 0, strlen(value)))
+		return 1;
+	list->size++;
+	return 0;
+}
+
+
+int str_list_split(STR_LIST *list, char *values, char delimeter) {
+	str_list_clear(list);
+	int values_len = strlen(values);
+	char value[STR_COLLECTION_VALUE_SIZE_MAX];
+	int value_size = 0;
+	value[value_size]=0;
+	for (int i=0; values[i]!=0; i++) {
+		if (values[i]==delimeter) {
+			if (str_list_add(list, value)) return 1;
 		} else {
-			if (element_size>=ARRAY_ELEMENT_SIZE_MAX-1) {
-				stderr_printf(21, ARRAY_ELEMENT_SIZE_MAX, array[element_index]);
+			if (value_size>=STR_COLLECTION_VALUE_SIZE_MAX-1) {
+				log_stderr_printf(21, STR_COLLECTION_VALUE_SIZE_MAX, value);
 				return 1;
 			}
-			array[element_index][element_size++]=list[i];
-			array[element_index][element_size]=0;
+			value[value_size++]=values[i];
+			value[value_size]=0;
 		}
 	}
-	*array_size = element_index+1;
 	return 0;
 }

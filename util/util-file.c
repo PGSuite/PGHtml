@@ -7,30 +7,30 @@
 int file_read(char *path, FILE_BODY *file_body) {
     FILE * file = fopen(path,"rb");
 	if(file==NULL) {
-		stderr_printf(8, path);
+		log_stderr_printf(8, path);
 		return 1;
 	}
 	char *body=malloc(FILE_SIZE_MAX);
 	if (body==NULL) {
-		stderr_printf(9, FILE_SIZE_MAX);
+		log_stderr_printf(9, FILE_SIZE_MAX);
 	    fclose(file);
 		return 1;
 	}
 	int size = fread(body, 1, FILE_SIZE_MAX-1, file);
 	if(ferror(file)) {
-		stderr_printf(10, path);
+		log_stderr_printf(10, path);
 		free(body);
 		fclose(file);
 		return 1;
 	}
 	if(!feof(file)) {
-		stderr_printf(11, path);
+		log_stderr_printf(11, path);
 		free(body);
 		fclose(file);
 		return 1;
 	}
     if (fclose(file)) {
-		stderr_printf(14, path);
+		log_stderr_printf(14, path);
 		return 1;
 	}
     body[size]=0;
@@ -64,22 +64,22 @@ int file_compare(char *path, FILE_BODY *file_new) {
 int file_write(char *path, FILE_BODY *file_body) {
     FILE * file = fopen(path,"wb");
 	if(file==NULL) {
-		stderr_printf(8, path);
+		log_stderr_printf(8, path);
 	    return 1;
 	}
 	int size = fwrite(file_body->body, 1, file_body->size, file);
 	if(ferror(file)) {
-		stderr_printf(12, path);
+		log_stderr_printf(12, path);
 		fclose(file);
 		return 1;
 	}
 	if(size!=file_body->size) {
-		stderr_printf(13, path);
+		log_stderr_printf(13, path);
 		fclose(file);
 		return 1;
 	}
     if (fclose(file)) {
-		stderr_printf(14, path);
+		log_stderr_printf(14, path);
 		return 1;
 	}
     return 0;
@@ -87,7 +87,7 @@ int file_write(char *path, FILE_BODY *file_body) {
 
 int file_add(FILE_BODY *file_body, char *source, int pos_begin, int pos_end) {
 	if (file_body->size+(pos_end-pos_begin)>=FILE_SIZE_MAX) {
-		stderr_printf(15, file_body->size+(pos_end-pos_begin));
+		log_stderr_printf(15, file_body->size+(pos_end-pos_begin));
 		return 1;
 	}
 	for (int i=pos_begin; i<=pos_end; i++)
@@ -102,7 +102,7 @@ int file_add_eol(FILE_BODY *file_body) {
 int file_body_empty(FILE_BODY *filebody) {
 	filebody->body = malloc(FILE_SIZE_MAX);
 	if (filebody->body==NULL) {
-		stderr_printf(9, FILE_SIZE_MAX);
+		log_stderr_printf(9, FILE_SIZE_MAX);
 		return 1;
 	}
 	filebody->size = 0;
@@ -116,15 +116,15 @@ int file_is_dir(char *filepath) {
 }
 
 
-int file_extention(char *extention, int extention_size, char *filepath) {
+int file_extension(char *extension, int extension_size, char *filepath) {
 	int i = strlen(filepath);
 	while (i>=0)
 		if (filepath[--i]=='.') break;
 	if (i<0) {
-		extention[0]=0;
+		extension[0]=0;
 		return 0;
 	}
-	return str_substr(extention, extention_size, filepath, i+1, strlen(filepath)-i-1);
+	return str_substr(extension, extension_size, filepath, i+1, strlen(filepath)-i-1);
 }
 
 int file_filename(char *filename, int filename_size, char *filepath) {

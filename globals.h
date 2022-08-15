@@ -11,10 +11,8 @@
 #define TAG_PGHTML_INCLUDE_END   "</pghtml-include>"
 
 
-extern char directories[ARRAY_SIZE_MAX][ARRAY_ELEMENT_SIZE_MAX];
-extern int  directories_size;
-extern char file_extensions[ARRAY_SIZE_MAX][ARRAY_ELEMENT_SIZE_MAX];
-extern int  file_extensions_size;
+extern STR_LIST directories;
+extern STR_LIST file_extensions;
 
-extern VARS g_vars;
+extern STR_MAP g_vars;
 

@@ -2,12 +2,7 @@
 
 #include "globals.h"
 
-char directories[ARRAY_SIZE_MAX][ARRAY_ELEMENT_SIZE_MAX];
-int  directories_size;
-char file_extensions[ARRAY_SIZE_MAX][ARRAY_ELEMENT_SIZE_MAX];
-int  file_extensions_size;
+STR_LIST directories;
+STR_LIST file_extensions;
 
-VARS g_vars;
-
-
-
+STR_MAP g_vars;

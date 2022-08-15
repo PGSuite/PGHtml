@@ -13,24 +13,24 @@ PGconn *pg_conn = 0;
 PGconn *pg_get_conn() { return pg_conn; }
 
 void pg_connect(char *pg_uri) {
-	stdout_printf('p', "\nconnecting to database... ");
+	log_stdout_printf('p', "\nconnecting to database... ");
     pg_conn = PQconnectdb(pg_uri);
     if (PQstatus(pg_conn) != CONNECTION_OK)
     {
-    	stderr_printf(1, PQerrorMessage(pg_conn));
+    	log_stderr_printf(1, PQerrorMessage(pg_conn));
     	PQfinish(pg_conn);
     	pg_conn = NULL;
-		strout_print_and_exit();
+		log_stdout_print_and_exit();
     }
     PQsetClientEncoding(pg_conn, PG_CLIENT_ENCODING);
-    stdout_printf('p', " done, server version: %d, user: %s, client_encoding: %s", PQserverVersion(pg_conn), PQuser(pg_conn), pg_encoding_to_char(PQclientEncoding(pg_conn)));
+    log_stdout_printf('p', " done, server version: %d, user: %s, client_encoding: %s", PQserverVersion(pg_conn), PQuser(pg_conn), pg_encoding_to_char(PQclientEncoding(pg_conn)));
 }
 
 void pg_disconnect() {
 	if (pg_conn=NULL) return;
 	PQfinish(pg_conn);
 	pg_conn = NULL;
-	stdout_printf('p', "\ndisconnected from database");
+	log_stdout_printf('p', "\ndisconnected from database");
 }
 
 int pg_get_string(const char *query, char *value) {
