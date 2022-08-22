@@ -5,12 +5,35 @@
 #include "globals.h"
 #include "util/util-file.h"
 
+FILE *file_list_updates = NULL;
+char file_list_updates_name[STR_SIZE_MAX];
+
+int file_list_updates_open(char *value) {
+	if (str_copy(file_list_updates_name, sizeof(file_list_updates_name), value)) return 1;
+	file_list_updates = fopen(file_list_updates_name,"wb");
+	if(!file_list_updates) {
+		log_stderr_printf(8, file_list_updates_name);
+	    return 1;
+	}
+	return 0;
+}
+
+int file_list_updates_close() {
+    if (file_list_updates && fclose(file_list_updates)) {
+		log_stderr_printf(14, file_list_updates_name);
+		return 1;
+	}
+    file_list_updates = NULL;
+	return 0;
+}
+
+
 int process_include(FILE_BODY *file, char *directory_root, char *directory) {
 	int pos_begin, pos_path, pos_end;
 	do  {
 		pos_begin = str_find(file->body, file->size, 0, TAG_PGHTML_INCLUDE_BEGIN, 0);
 		if (pos_begin==-1) break;
-		pos_path = str_find(file->body, file->size, pos_begin, ">", 0);
+		pos_path = str_find_char_html(file->body, file->size, pos_begin, '>');
 		if (pos_path==-1) {
 			log_stderr_printf(16, ">", pos_path);
 			return 1;
@@ -173,7 +196,7 @@ int process_file(char *directory_root, char *directory, char *filename, char *ex
 	char s_out[STR_SIZE_MAX] = "";
 	if (str_add_n(s_out, sizeof(s_out), 3, directory, filename, "...")) return 1;
 	if (str_rtrim(s_out, sizeof(s_out), 60)) return 1;
-	log_stdout_printf('p', "\n  file %s", s_out);
+	log_stdout_printf("\n  file %s", s_out);
 	char extension_dest[STR_SIZE_MAX];
 	if (str_substr(extension_dest, sizeof(extension_dest), extension_source, 2, strlen(extension_source)-2)) return 1;
 	char filepath_dest[STR_SIZE_MAX];
@@ -202,14 +225,19 @@ int process_file(char *directory_root, char *directory, char *filename, char *ex
 		free(file.body);
 		return 1;
 	}
-	log_stdout_printf('p', " done, %s", compare==0 ? "no update required" : compare==-1 ? "created" : "updated");
+	log_stdout_printf(" done, %s", compare==0 ? "no update required" : compare==-1 ? "created" : "updated");
 	if (compare) {
 		char filename_dest[STR_SIZE_MAX];
 		if (str_substr(filename_dest, sizeof(filename_dest), filename, 0, strlen(filename)-strlen(extension_source)) || str_add(filename_dest, sizeof(filename_dest), extension_dest)) {
 			free(file.body);
 			return 1;
 		}
-		log_stdout_printf('f', "\n%s%s", directory, filename_dest);
+		if (file_list_updates && fprintf(file_list_updates, "%s%s\n", directory, filename_dest)<=0) {
+			log_stderr_printf(13, file_list_updates_name);
+			fclose(file_list_updates);
+			file_list_updates = NULL;
+			return 1;
+		}
 	}
 	free(file.body);
 	return 0;
@@ -255,12 +283,12 @@ int process_directories() {
     		char c = directory_root[strlen(directory_root)-1];
     		if (c!='/' && c!='\\')
     			if (str_add(directory_root, sizeof(directory_root), FILE_SEPARATOR)) return 1;
-    		log_stdout_printf('p', "\nprocessing directory %s", directory_root);
+    		log_stdout_printf("\nprocessing directory %s", directory_root);
     		int result_directory = process_directory(directory_root, "");
     		result = result || result_directory;
-    		log_stdout_printf('p', "\ndirectory processed %s", result_directory ? "with error(s)" : "successfully");
+    		log_stdout_printf("\ndirectory processed %s", result_directory ? "with error(s)" : "successfully");
     	} else {
-    		log_stdout_printf('p', "\nprocessing file %s", directories.values[i]);
+    		log_stdout_printf("\nprocessing file %s", directories.values[i]);
     		char filename[STR_SIZE_MAX];
     		char extension[STR_SIZE_MAX];
     		if (file_filename(filename, sizeof(filename), directories.values[i])) return 1;
@@ -273,7 +301,7 @@ int process_directories() {
     		if (directory_root[0]==0 && str_copy(directory_root, sizeof(directory_root), ".")) return 1;
     		int result_file = process_file(directory_root, "", filename, extension);
     		result = result || result_file;
-    		log_stdout_printf('p', "\nfile processed %s", result_file ? "with error(s)" : "successfully");
+    		log_stdout_printf("\nfile processed %s", result_file ? "with error(s)" : "successfully");
     	}
     }
 	return result;

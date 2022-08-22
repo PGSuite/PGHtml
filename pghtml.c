@@ -32,31 +32,29 @@ char HELP[] =
 	"  -G_[NAME] VALUE    value of variable [G_NAME] \n" \
 	"\n" \
 	"Logging options:\n" \
-	"  -lf FILE           log file, when specified, the prefix is ​​set to \"tsp\"\n" \
-	"  -li INFO           n - none (only errors)\n" \
-	"                     f - only created and updated destination files\n" \
-	"                     p - processing (default)\n" \
-	"  -lp PREFIX         n - none (default), t - timestamp, tsp - \"timestamp stdout|stderr pthread_id\"\n" \
+	"  -l  FILE           log file, when specified, the prefix is ​​set to \"ts\"\n" \
+	"  -lu FILE           output file for only created and updated destination files\n" \
+	"  -lp PREFIX         n - none (default), t - timestamp, ts - \"timestamp stdout|stderr\"\n" \
 	"\n" \
 	"Info:\n" \
-	"  --help         print this help\n"
+	"  -h, --help         print this help\n"
 	"\n" \
 	"Examples:\n" \
 	"  pghtml /mysite\n" \
-	"  pghtml /mysite1 /mysite2/index.pghtml -d sitedb -lf /tmp/pghtml.log\n" \
-	"  pghtml /mysite -h server-db.mycompany.com -d sitedb -U appuser -W 12345\n" \
-	"  pghtml /mysite -u postgresql://192.168.10.20:5432/sitedb?user=postgres&password=12345 -G_ENV PROD -pi f -lp t\n";
+	"  pghtml /mysite1 /mysite2/index.pghtml -d sitedb -l /tmp/pghtml.log\n" \
+	"  pghtml /mysite -h server-db.mycompany.com -d sitedb -U appuser -W 12345 -lu /tmp/files_updated.lst\n" \
+	"  pghtml /mysite -u postgresql://192.168.10.20:5432/sitedb?user=postgres&password=12345 -G_ENV PROD\n";
+
 
 int main(int argc, char *argv[])
 {
 
-	if (argc==1 || strcmp(argv[1],"-help")==0 || strcmp(argv[1],"--help")==0) {
+	if (argc==1 || strcmp(argv[1],"-h")==0 || strcmp(argv[1],"-help")==0 || strcmp(argv[1],"--help")==0) {
 		printf("%s\n", HELP);
 		return 1;
 	}
 
-	log_set_program_name("PGHtml");
-	log_set_error_prefix("PGHTML-");
+	log_set_program_info("PGHtml", "PGHTML-");
 
 	char *pg_host             = "";
 	char *pg_port             = NULL;
@@ -74,12 +72,12 @@ int main(int argc, char *argv[])
 	for(int i=1; i<argc; i++) {
 		if (argv[i][0]!='-') {
 			if (str_list_add(&directories, argv[i]))
-				log_stdout_print_and_exit();
+				log_stdout_print_and_exit(2);
 			continue;
 		}
 		if (i==argc-1) {
 			log_stderr_printf(2, argv[i]);
-			log_stdout_print_and_exit();
+			log_stdout_print_and_exit(2);
 		}
 		if (strcmp(argv[i],"-h")==0)   	  pg_host=argv[++i];
 		else if (strcmp(argv[i],"-p")==0) pg_port=argv[++i];
@@ -89,26 +87,31 @@ int main(int argc, char *argv[])
 		else if (strcmp(argv[i],"-e")==0) extentions=argv[++i];
 		else if (strcmp(argv[i],"-u")==0) {
 			if (str_copy(pg_uri, sizeof(pg_uri), argv[++i]))
-				log_stdout_print_and_exit();
+				log_stdout_print_and_exit(2);
 		}
 		else if (strlen(argv[i])>3 && argv[i][1]=='G' && argv[i][2]=='_') {
 		    char g_var_name[STR_SIZE_MAX];
 		    if (str_substr(g_var_name, sizeof(g_var_name), argv[i], 1, strlen(argv[i])-1))
-				log_stdout_print_and_exit();
+				log_stdout_print_and_exit(2);
 			if (str_map_put(&g_vars, g_var_name, argv[++i]))
-				log_stdout_print_and_exit();
+				log_stdout_print_and_exit(2);
 		}
-		else if (strcmp(argv[i],"-li")==0) log_set_info_type(argv[++i][0]);
-		else if (strcmp(argv[i],"-lp")==0) log_set_prefix(argv[++i][0]);
+		else if (strcmp(argv[i],"-l")==0) {
+			log_set_prefix("ts");
+			log_set_file(argv[++i]);
+		} else if (strcmp(argv[i],"-lu")==0) {
+			if (file_list_updates_open(argv[++i])) return 1;
+		}
+		else if (strcmp(argv[i],"-lp")==0) log_set_prefix(argv[++i]);
 		else {
 			log_stderr_printf(3, argv[i]);
-			log_stdout_print_and_exit();
+			log_stdout_print_and_exit(2);
 		}
 	}
 
 	if (directories.size==0) {
 		log_stderr_printf(4);
-		log_stdout_print_and_exit();
+		log_stdout_print_and_exit(2);
 	}
 
     if (strlen(pg_uri)==0) {
@@ -128,36 +131,36 @@ int main(int argc, char *argv[])
     		return 1;
     	}
 
-    log_stdout_printf('p', "\ndirectories:       ");
+    log_stdout_printf("\ndirectories:       ");
     for(int i=0; i<directories.size; i++) {
-    	log_stdout_printf('p', "%s%s", i==0 ? "" : PATH_SEPARATOR, directories.values[i]);
+    	log_stdout_printf("%s%s", i==0 ? "" : PATH_SEPARATOR, directories.values[i]);
     }
-    log_stdout_printf('p', "\nfile extensions:   ");
+    log_stdout_printf("\nfile extensions:   ");
     for(int i=0; i<file_extensions.size; i++)
-    	log_stdout_printf('p', "%s%s", i==0 ? "" : FILE_EXTENTIONS_SEPARATOR, file_extensions.values[i]);
+    	log_stdout_printf("%s%s", i==0 ? "" : FILE_EXTENTIONS_SEPARATOR, file_extensions.values[i]);
 
-    log_stdout_printf('p', "\nglobal variables:  ");
+    log_stdout_printf("\nglobal variables:  ");
     for(int i=0; i<g_vars.size; i++)
-    	log_stdout_printf('p', "%s%s", i==0 ? "" : ",", g_vars.keys[i]);
+    	log_stdout_printf("%s%s", i==0 ? "" : ",", g_vars.keys[i]);
 
-    log_stdout_printf('p', "\ndatabase URI:      ");
+    log_stdout_printf("\ndatabase URI:      ");
 
     int pg_uri_pos = str_find(pg_uri, sizeof(pg_uri), 0, "password=", 1);
     char pg_uri_out[STR_SIZE_MAX];
     if (pg_uri_pos==-1) {
-    	log_stdout_printf('p', "%s", pg_uri);
+    	log_stdout_printf("%s", pg_uri);
     } else {
         if (str_substr(pg_uri_out, sizeof(pg_uri_out), pg_uri, 0, pg_uri_pos+9)) return 1;
-        log_stdout_printf('p', "%s%s%s%s", pg_uri_out, "*","*","*");
+        log_stdout_printf("%s%s%s%s", pg_uri_out, "*","*","*");
     	pg_uri_pos = str_find(pg_uri, sizeof(pg_uri), pg_uri_pos, "&", 0);
     	if (pg_uri_pos!=-1) {
             if (str_substr(pg_uri_out, sizeof(pg_uri_out), pg_uri, pg_uri_pos, strlen(pg_uri)-pg_uri_pos)) return 1;
-            log_stdout_printf('p', "%s", pg_uri_out);
+            log_stdout_printf("%s", pg_uri_out);
     	}
     }
 
-    log_stdout_printf('p', "\nlibpq version:     %d", PQlibVersion());
-    log_stdout_printf('p', "\n");
+    log_stdout_printf("\nlibpq version:     %d", PQlibVersion());
+    log_stdout_printf("\n");
 
 	pg_connect(pg_uri);
 
@@ -165,10 +168,8 @@ int main(int argc, char *argv[])
 
 	pg_disconnect();
 
-	log_stdout_printf('p', "\n");
-	log_stdout_printf('p', "\n%s", !result ? "completed successfully" : "completed with errors");
-	log_stdout_printf('p', "\n");
+	if (file_list_updates_close()) result=1;
 
-	return result;
+	log_stdout_print_and_exit(result);
 
 }

@@ -17,6 +17,23 @@ int str_find(char *body, int body_size, int pos, char *substr, int ignore_case) 
 	return -1;
 }
 
+int str_find_char_html(char *html, int html_size, int pos, char c) {
+	char in_str_char = 0;
+	for(int i=pos; i<html_size; i++) {
+		if (!in_str_char && html[i]==c) return i;
+		if (!in_str_char && (html[i]=='"' || html[i]=='\'')) {
+			in_str_char = html[i];
+			continue;
+		}
+		if (in_str_char && in_str_char==html[i]) {
+			in_str_char = 0;
+			continue;
+		}
+	}
+	return -1;
+}
+
+
 int str_substr(char *dest, int dest_size, char *source, int pos, int len) {
 	if (len<=0) {
 		dest[0] = 0;
@@ -174,14 +191,15 @@ int str_list_split(STR_LIST *list, char *values, char delimeter) {
 	for (int i=0; values[i]!=0; i++) {
 		if (values[i]==delimeter) {
 			if (str_list_add(list, value)) return 1;
+			value_size=0;
 		} else {
 			if (value_size>=STR_COLLECTION_VALUE_SIZE_MAX-1) {
 				log_stderr_printf(21, STR_COLLECTION_VALUE_SIZE_MAX, value);
 				return 1;
 			}
 			value[value_size++]=values[i];
-			value[value_size]=0;
 		}
+		value[value_size]=0;
 	}
 	return 0;
 }
