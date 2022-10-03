@@ -1,6 +1,6 @@
 #include <libpq-fe.h>
 
-#include "util/util-str.h"
+#include "util/util_str.h"
 
 #define FILE_EXTENTIONS_SEPARATOR ":"
 #define FILE_EXTENTIONS_DEFAULT   "pghtml" FILE_EXTENTIONS_SEPARATOR "pgtxt" FILE_EXTENTIONS_SEPARATOR "pgjs" FILE_EXTENTIONS_SEPARATOR "pgjson"
@@ -16,3 +16,4 @@ extern STR_LIST file_extensions;
 
 extern STR_MAP g_vars;
 
+extern PGconn *pg_conn;

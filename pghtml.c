@@ -4,12 +4,12 @@
 
 #include "globals.h"
 
-#include "util/util-str.h"
-#include "util/util-file.h"
+#include "util/util_str.h"
+#include "util/util_file.h"
+
+#define PROGRAM_DESC "PGHtml is utility for creation an html files using data from PostgreSQL"
 
 char HELP[] =
-	"pghtml is utility for creation an html files using data from PostgreSQL\n" \
-	"\n" \
 	"Usage:\n" \
 	"  pghtml DIRECTORIES [OPTIONS]\n" \
 	"\n" \
@@ -32,7 +32,7 @@ char HELP[] =
 	"  -G_[NAME] VALUE    value of variable [G_NAME] \n" \
 	"\n" \
 	"Logging options:\n" \
-	"  -l  FILE           log file, when specified, the prefix is ​​set to \"ts\"\n" \
+	"  -l  FILE           log file, when specified, the prefix is set to \"ts\"\n" \
 	"  -lu FILE           output file for only created and updated destination files\n" \
 	"  -lp PREFIX         n - none (default), t - timestamp, ts - \"timestamp stdout|stderr\"\n" \
 	"\n" \
@@ -49,19 +49,23 @@ char HELP[] =
 int main(int argc, char *argv[])
 {
 
-	if (argc==1 || strcmp(argv[1],"-h")==0 || strcmp(argv[1],"-help")==0 || strcmp(argv[1],"--help")==0) {
-		printf("%s\n", HELP);
-		return 1;
+	log_initialize("PGHTML-");
+
+	if (argc==1 || strcmp(argv[1],"-h")==0 || strcmp(argv[1],"-help")==0 || strcmp(argv[1],"--help")==0 || strcmp(argv[1],"help")==0) {
+		log_stdout_print_header(PROGRAM_DESC);
+		log_stdout_printf(HELP);
+		exit(0);
 	}
 
-	log_set_program_info("PGHtml", "PGHTML-");
+	char *log_file   = NULL;
+	char *log_prefix = NULL;
 
-	char *pg_host             = "";
-	char *pg_port             = NULL;
-	char *pg_db_name          = "";
-	char *pg_user             = NULL;
-	char *pg_password         = NULL;
-	char pg_uri[STR_SIZE_MAX] = "";
+	char *db_host             = "";
+	char *db_port             = NULL;
+	char *db_name             = "";
+	char *db_user             = NULL;
+	char *db_password         = NULL;
+	char db_uri[STR_SIZE_MAX] = "";
 
 	char *extentions  = NULL;
 
@@ -76,17 +80,17 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		if (i==argc-1) {
-			log_stderr_printf(2, argv[i]);
+			log_stderr_print(2, argv[i]);
 			log_stdout_print_and_exit(2);
 		}
-		if (strcmp(argv[i],"-h")==0)   	  pg_host=argv[++i];
-		else if (strcmp(argv[i],"-p")==0) pg_port=argv[++i];
-		else if (strcmp(argv[i],"-d")==0) pg_db_name=argv[++i];
-		else if (strcmp(argv[i],"-U")==0) pg_user=argv[++i];
-		else if (strcmp(argv[i],"-W")==0) pg_password=argv[++i];
+		if (strcmp(argv[i],"-h")==0)   	  db_host=argv[++i];
+		else if (strcmp(argv[i],"-p")==0) db_port=argv[++i];
+		else if (strcmp(argv[i],"-d")==0) db_name=argv[++i];
+		else if (strcmp(argv[i],"-U")==0) db_user=argv[++i];
+		else if (strcmp(argv[i],"-W")==0) db_password=argv[++i];
 		else if (strcmp(argv[i],"-e")==0) extentions=argv[++i];
 		else if (strcmp(argv[i],"-u")==0) {
-			if (str_copy(pg_uri, sizeof(pg_uri), argv[++i]))
+			if (str_copy(db_uri, sizeof(db_uri), argv[++i]))
 				log_stdout_print_and_exit(2);
 		}
 		else if (strlen(argv[i])>3 && argv[i][1]=='G' && argv[i][2]=='_') {
@@ -96,77 +100,52 @@ int main(int argc, char *argv[])
 			if (str_map_put(&g_vars, g_var_name, argv[++i]))
 				log_stdout_print_and_exit(2);
 		}
-		else if (strcmp(argv[i],"-l")==0) {
-			log_set_prefix("ts");
-			log_set_file(argv[++i]);
-		} else if (strcmp(argv[i],"-lu")==0) {
+		else if (strcmp(argv[i],"-l")==0) log_file = argv[++i];
+		else if (strcmp(argv[i],"-lp")==0) log_prefix = argv[++i];
+		else if (strcmp(argv[i],"-lu")==0) {
 			if (file_list_updates_open(argv[++i])) return 1;
-		}
-		else if (strcmp(argv[i],"-lp")==0) log_set_prefix(argv[++i]);
-		else {
-			log_stderr_printf(3, argv[i]);
+		} else {
+			log_stderr_print(3, argv[i]);
 			log_stdout_print_and_exit(2);
 		}
 	}
 
 	if (directories.size==0) {
-		log_stderr_printf(4);
+		log_stderr_print(4);
 		log_stdout_print_and_exit(2);
 	}
 
-    if (strlen(pg_uri)==0) {
-        if (str_add_n(pg_uri, sizeof(pg_uri), 2, "postgresql://", pg_host)) return 1;
-        if (pg_port!=NULL)
-        	if (str_add_n(pg_uri, sizeof(pg_uri), 2, ":", pg_port)) return 1;
-        if (str_add_n(pg_uri, sizeof(pg_uri), 3, "/", pg_db_name, "?connect_timeout=10")) return 1;
-        if (pg_user!=NULL      && str_add_n(pg_uri, sizeof(pg_uri), 2, "&user=", pg_user)) return 1;
-        if (pg_password !=NULL && str_add_n(pg_uri, sizeof(pg_uri), 2, "&password=", pg_password)) return 1;
-	}
+    if ( strlen(db_uri)==0 && pg_uri_build(db_uri, sizeof(db_uri), db_host, db_port, db_name, db_user, db_password) )
+		log_stdout_print_and_exit(2);
 
     if (extentions==NULL) extentions = FILE_EXTENTIONS_DEFAULT;
     if (str_list_split(&file_extensions, extentions, FILE_EXTENTIONS_SEPARATOR[0])) return 1;
     for(int i=0; i<file_extensions.size; i++)
     	if (strlen(file_extensions.values[i])<3 || file_extensions.values[i][0]!='p' || file_extensions.values[i][1]!='g') {
-    		log_stderr_printf(22, file_extensions.values[i]);
+    		log_stderr_print(22, file_extensions.values[i]);
     		return 1;
     	}
 
-    log_stdout_printf("\ndirectories:       ");
-    for(int i=0; i<directories.size; i++) {
-    	log_stdout_printf("%s%s", i==0 ? "" : PATH_SEPARATOR, directories.values[i]);
-    }
-    log_stdout_printf("\nfile extensions:   ");
-    for(int i=0; i<file_extensions.size; i++)
-    	log_stdout_printf("%s%s", i==0 ? "" : FILE_EXTENTIONS_SEPARATOR, file_extensions.values[i]);
+	log_stdout_print_header(PROGRAM_DESC);
 
-    log_stdout_printf("\nglobal variables:  ");
+    if (str_list_print(&directories,     PATH_SEPARATOR[0],            "\ndirectories:       ") ||
+    	str_list_print(&file_extensions, FILE_EXTENTIONS_SEPARATOR[0], "\nfile extensions:   ")) {
+		log_stdout_print_and_exit(2);
+    }
+
+    log_stdout_println("global variables:  ");
     for(int i=0; i<g_vars.size; i++)
     	log_stdout_printf("%s%s", i==0 ? "" : ",", g_vars.keys[i]);
 
-    log_stdout_printf("\ndatabase URI:      ");
+    log_stdout_println("libpq version:     %d", PQlibVersion());
+    log_stdout_println("");
 
-    int pg_uri_pos = str_find(pg_uri, sizeof(pg_uri), 0, "password=", 1);
-    char pg_uri_out[STR_SIZE_MAX];
-    if (pg_uri_pos==-1) {
-    	log_stdout_printf("%s", pg_uri);
-    } else {
-        if (str_substr(pg_uri_out, sizeof(pg_uri_out), pg_uri, 0, pg_uri_pos+9)) return 1;
-        log_stdout_printf("%s%s%s%s", pg_uri_out, "*","*","*");
-    	pg_uri_pos = str_find(pg_uri, sizeof(pg_uri), pg_uri_pos, "&", 0);
-    	if (pg_uri_pos!=-1) {
-            if (str_substr(pg_uri_out, sizeof(pg_uri_out), pg_uri, pg_uri_pos, strlen(pg_uri)-pg_uri_pos)) return 1;
-            log_stdout_printf("%s", pg_uri_out);
-    	}
-    }
-
-    log_stdout_printf("\nlibpq version:     %d", PQlibVersion());
-    log_stdout_printf("\n");
-
-	pg_connect(pg_uri);
+	if (pg_connect(&pg_conn, db_uri))
+		log_stdout_print_and_exit(2);
 
 	int result = process_directories();
 
-	pg_disconnect();
+	pg_disconnect(pg_conn);
 
 	if (file_list_updates_close()) result=1;
 
