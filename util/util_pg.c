@@ -26,13 +26,13 @@ int pg_uri_mask_password(char *uri_out, int uri_out_size, char *uri) {
 	int password_pos = str_find(uri, uri_len, 0, "password=", 1);
 	if (password_pos==-1)
 		return str_copy(uri_out, uri_out_size, uri);
-	if (str_substr(uri_out, uri_out_size, uri, 0, password_pos+9))
+	if (str_substr(uri_out, uri_out_size, uri, 0, password_pos+8))
 		return 1;
 	if (str_add(uri_out, uri_out_size, 3, "*","*","*", NULL)) return 1;
 	password_pos = str_find(uri, uri_len, password_pos, "&", 0);
 	if (password_pos!=-1) {
 		char s[STR_SIZE_MAX];
-		if (str_substr(s, sizeof(s), uri, password_pos, uri_len-password_pos)) return 1;
+		if (str_substr(s, sizeof(s), uri, password_pos, uri_len-1)) return 1;
 		if (str_add(uri_out, uri_out_size, s, NULL)) return 1;
 	}
 	return 0;

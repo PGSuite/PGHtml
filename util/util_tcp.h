@@ -7,6 +7,9 @@
 #define TCP_SOCKET_T       SOCKET
 #define TCP_ERRNO          WSAGetLastError()
 
+#include "util_str.h"
+#include "util_file.h"
+
 #else
 
 #include <errno.h>
@@ -19,6 +22,5 @@
 #endif
 
 #define TCP_TIMEOUT 5
-
 
 #endif /* UTIL_TCP_H_ */

@@ -44,13 +44,13 @@ int process_include(FILE_BODY *file, char *directory_root, char *directory) {
 			return 1;
 		}
 		char tag[STR_SIZE_MAX];
-		if (str_substr(tag, sizeof(tag), file->body, pos_begin, pos_path-pos_begin+1))
+		if (str_substr(tag, sizeof(tag), file->body, pos_begin, pos_path))
 			return 1;
 		STR_MAP vars;
 		if (str_tag_attributes(tag, &vars))
 			return 1;
 		char include_filename[STR_SIZE_MAX];
-		if (str_substr(include_filename, sizeof(include_filename), file->body, pos_path+1, pos_end-pos_path-1))
+		if (str_substr(include_filename, sizeof(include_filename), file->body, pos_path+1, pos_end-1))
 			return 1;
 		char include_path[STR_SIZE_MAX] = "";
 		if (str_add(include_path, sizeof(include_path), directory_root, NULL)) return 1;
@@ -73,12 +73,10 @@ int process_include(FILE_BODY *file, char *directory_root, char *directory) {
 		if (file_body_add_substr(&file_new, file->body, 0, pos_begin-1) ||
 			file_body_add_substr(&file_new, include_body.body, 0, include_body.size-1) ||
 			file_body_add_substr(&file_new, file->body, pos_end+strlen(TAG_PGHTML_INCLUDE_END), file->size-1)) {
+			file_body_free(&file_new);
 			return 1;
 		};
-		file_body_free(&file);
-		file->body = file_new.body;
-		file->size = file_new.size;
-		file->size_max = file_new.size_max;
+		if (file_body_replace(file, &file_new)) return 1;
 	} while(1);
 	return 0;
 }
@@ -106,7 +104,7 @@ int process_vars(FILE_BODY *file, STR_MAP *vars) {
 		}
 		pos_end++;
 		char var_name[STR_SIZE_MAX];
-		if (str_substr(var_name, sizeof(var_name), file->body, pos_begin+2, pos_end-pos_begin-3)) {
+		if (str_substr(var_name, sizeof(var_name), file->body, pos_begin+2, pos_end-2)) {
 			file_body_free(&file_new);
 			return 1;
 		}
@@ -126,10 +124,7 @@ int process_vars(FILE_BODY *file, STR_MAP *vars) {
 		if (file_body_add_substr(&file_new, var_value, 0, strlen(var_value)-1))
 			return 1;
 	}
-	file_body_free(file);
-	file->body = file_new.body;
-	file->size = file_new.size;
-	file->size_max = file_new.size_max;
+	if (file_body_replace(file, &file_new)) return 1;
 	return 0;
 }
 
@@ -155,7 +150,7 @@ int process_pg_sql(FILE_BODY *file) {
 		}
 		pos_begin += strlen(TAG_PGHTML_SQL_BEGIN);
 		char query[STR_SIZE_MAX];
-		if (str_substr(query, sizeof(query), file->body, pos_begin, pos_end-pos_begin))
+		if (str_substr(query, sizeof(query), file->body, pos_begin, pos_end-1))
 			return 1;
 		pos_end += strlen(TAG_PGHTML_SQL_END);
 		PGresult *pg_result = PQexec(pg_conn, query);
@@ -166,7 +161,7 @@ int process_pg_sql(FILE_BODY *file) {
 		int row_count = PQntuples(pg_result);
 		int column_count = PQnfields(pg_result);
         for(int i=0; i<row_count; i++) {
-        	if (i>0 && file_body_add_eol(&file_new))
+        	if (i>0 && file_body_add_str(&file_new, "\r\n", NULL))
         		return 1;
         	for(int j=0; j<column_count; j++) {
             	if (j>0 && file_body_add_substr(&file_new, " ", 0, 0))
@@ -178,7 +173,7 @@ int process_pg_sql(FILE_BODY *file) {
         }
         PQclear(pg_result);
 	}
-	file_body_free(&file);
+	if (file_body_replace(file, &file_new)) return 1;
 	return 0;
 }
 
@@ -190,9 +185,9 @@ int process_file(char *directory_root, char *directory, char *filename, char *ex
 	if (str_rtrim(s_out, sizeof(s_out), 60)) return 1;
 	log_stdout_println("  file %s", s_out);
 	char extension_dest[STR_SIZE_MAX];
-	if (str_substr(extension_dest, sizeof(extension_dest), extension_source, 2, strlen(extension_source)-2)) return 1;
+	if (str_substr(extension_dest, sizeof(extension_dest), extension_source, 2, strlen(extension_source)-1)) return 1;
 	char filepath_dest[STR_SIZE_MAX];
-	if (str_substr(filepath_dest, sizeof(filepath_dest), filepath_source, 0, strlen(filepath_source)-strlen(extension_source))) return 1;
+	if (str_substr(filepath_dest, sizeof(filepath_dest), filepath_source, 0, strlen(filepath_source)-strlen(extension_source)-1)) return 1;
 	if (str_add(filepath_dest, sizeof(filepath_dest), extension_dest, NULL)) return 1;
 	FILE_BODY file;
 	if (file_read(filepath_source, &file))
@@ -220,7 +215,7 @@ int process_file(char *directory_root, char *directory, char *filename, char *ex
 	log_stdout_printf(" done, %s", compare==0 ? "no update required" : compare==-1 ? "created" : "updated");
 	if (compare) {
 		char filename_dest[STR_SIZE_MAX];
-		if (str_substr(filename_dest, sizeof(filename_dest), filename, 0, strlen(filename)-strlen(extension_source)) || str_add(filename_dest, sizeof(filename_dest), extension_dest, NULL)) {
+		if (str_substr(filename_dest, sizeof(filename_dest), filename, 0, strlen(filename)-strlen(extension_source)-1) || str_add(filename_dest, sizeof(filename_dest), extension_dest, NULL)) {
 			file_body_free(&file);
 			return 1;
 		}
@@ -293,7 +288,7 @@ int process_directories() {
     			log_stderr_print(22, extension);
     			return 1;
     		}
-    		if (str_substr(directory_root, sizeof(directory_root), directories.values[i], 0, strlen(directories.values[i])-strlen(filename))) return 1;
+    		if (str_substr(directory_root, sizeof(directory_root), directories.values[i], 0, strlen(directories.values[i])-1)) return 1;
     		if (directory_root[0]==0 && str_copy(directory_root, sizeof(directory_root), ".")) return 1;
     		int result_file = process_file(directory_root, "", filename, extension);
     		result = result || result_file;

@@ -14,62 +14,63 @@
 #define STDTYPE_STREAM(stdtype) (stdtype==STDTYPE_OUT ? stdout : stderr)
 
 const char *ERRORS[] = {
-	"Unrecognized error",                                         //  0
-	"Database сonnection error:\n%s",                             //  1
-	"No value for option \"%s\"",                                 //  2
-	"Non-existent option \"%s\"",                                 //  3
-	"Not specified directory for processing",                     //  4
-	"Destination string too small (%d bytes, %d required)",       //  5
-	"Too many attributes for tag \"%s\"",                         //  6
-	"Not parse attribute name from position %d of tag \"%s\"",    //  7
-	"Error open file \"%s\"\n",                                   //  8
-	"Can not allocate memory (%d bytes)",                         //  9
-	"Error read file \"%s\"",                                     // 10
-	"File \"%s\" read partially",                                 // 11
-	"Error write file \"%s\"",                                    // 12
-	"File \"%s\" written partially",                              // 13
-	"Error close file \"%s\"",                                    // 14
-	"<deleted>",               // 15
-	"Not found \"%s\" for position %d",                           // 16
-	"Not found char \"}\" for start position %d",                 // 17
-	"Not found tag \"%s\" for start position %d",                 // 18
-	"SQL error:\n%s\n%s",                                         // 19
-	"List size (%d) too small (value=\"%s\")",                    // 20
-	"Collection value size (%d) too small for string \"%s...\"",  // 21
-	"File extension \"%s\" must start with \"pg\"",               // 22
-	"Too many directories or files (max %d)",                     // 23
-	"Map size (%d) too small (key=\"%s\",value=\"%s\")",          // 24
-	"Error (errno %d) open log file \"%s\" for %s",               // 25
-	"Can not create thread \"%s\"",                               // 26
-	"Can not start WSA (errno %d)",                               // 27
-	"Can not create socket (errno %d)",                           // 28
-	"Can not bind socket to port %d (errno %d)",                  // 29
-	"Can not listen for incoming connections (errno %d)",         // 30
-	"Can not accept connection (errno %d)",                       // 31
-	"Can not set timeout (errno %d)",                             // 32
-	"No data to recieve from socket (timeout %d sec)",            // 33
-	"Can not send to socket (errno %d)",                          // 34
-	"Can not close socket (errno %d)",                            // 35
-	"Can not initialize mutex",                                   // 36
-	"Can not lock mutex",                                         // 37
-	"Can not unlock mutex",                                       // 38
-	"Incorrect administration command \"%s\"",                    // 39
-	"No value, SQL query:\n%s",                                   // 40
-	"Not option \"%s\"",                                          // 41
-	"Incorrect port number \"%s\"",                               // 42
-	"Can not connect to %s:%d (errno %d)",                        // 43
-	"Process not stopped (administration socket not closed)",     // 44
-	"Error on recieved data from socket (errno %d)",              // 45
-	"Too many (%d) program arguments",                            // 46
-	"Can not create process (errno %d), command:\n%s",            // 47
-	"Can not initialize log mutex",                               // 48
-	"Can not create directory \"%s\" (errno %d)",                 // 49
-	"Can not get stat for path \"%s\" (errno %d)",                // 50
-	"File body is null (memory not allocated)",                   // 51
-	"Unrecognized command (\"%s\")",                              // 52
-	"<deleted>",                 // 53
-	"Incorrect parameters (%s)",                                  // 54
-	""                                                            //
+	"Unrecognized error" ,                                                            //  0
+	"Database сonnection error:\n%s",                                                 //  1
+	"No value for option \"%s\"",                                                     //  2
+	"Non-existent option \"%s\"",                                                     //  3
+	"Not specified directory for processing",                                         //  4
+	"Destination string too small (%d bytes, %d required)",                           //  5
+	"Too many attributes for tag \"%s\"",                                             //  6
+	"Not parse attribute name from position %d of tag \"%s\"",                        //  7
+	"Error open file \"%s\"\n",                                                       //  8
+	"Can not allocate memory (%d bytes)",                                             //  9
+	"Error read file \"%s\"",                                                         // 10
+	"File \"%s\" read partially",                                                     // 11
+	"Error write file \"%s\"",                                                        // 12
+	"File \"%s\" written partially",                                                  // 13
+	"Error close file \"%s\"",                                                        // 14
+	"Invalid UTF8 first byte (position: %d, text start: \"%.20s\")",                  // 15
+	"Not found \"%s\" for position %d",                                               // 16
+	"Not found char \"}\" for start position %d",                                     // 17
+	"Not found tag \"%s\" for start position %d",                                     // 18
+	"SQL error:\n%s\n%s",                                                             // 19
+	"List size (%d) too small (value=\"%s\")",                                        // 20
+	"Collection value size (%d) too small for string \"%s...\"",                      // 21
+	"File extension \"%s\" must start with \"pg\"",                                   // 22
+	"Too many directories or files (max %d)",                                         // 23
+	"Map size (%d) too small (key=\"%s\",value=\"%s\")",                              // 24
+	"Error (errno %d) open log file \"%s\" for %s",                                   // 25
+	"Can not create thread \"%s\"",                                                   // 26
+	"Can not start WSA (errno %d)",                                                   // 27
+	"Can not create socket (errno %d)",                                               // 28
+	"Can not bind socket to port %d (errno %d)",                                      // 29
+	"Can not listen for incoming connections (errno %d)",                             // 30
+	"Can not accept connection (errno %d)",                                           // 31
+	"Can not set timeout (errno %d)",                                                 // 32
+	"No data to recieve from socket (timeout %d sec)",                                // 33
+	"Can not send to socket (errno %d)",                                              // 34
+	"Can not close socket (errno %d)",                                                // 35
+	"Can not initialize mutex",                                                       // 36
+	"Can not lock mutex",                                                             // 37
+	"Can not unlock mutex",                                                           // 38
+	"Incorrect administration command \"%s\"",                                        // 39
+	"No value, SQL query:\n%s",                                                       // 40
+	"Not option \"%s\"",                                                              // 41
+	"Incorrect port number \"%s\"",                                                   // 42
+	"Can not connect to %s:%d (errno %d)",                                            // 43
+	"Process not stopped (administration socket not closed)",                         // 44
+	"Error on recieved data from socket (errno %d)",                                  // 45
+	"Too many (%d) program arguments",                                                // 46
+	"Can not create process (errno %d), command:\n%s",                                // 47
+	"Can not initialize log mutex",                                                   // 48
+	"Can not create directory \"%s\" (errno %d)",                                     // 49
+	"Can not get stat for path \"%s\" (errno %d)",                                    // 50
+	"File body is null (memory not allocated)",                                       // 51
+	"Unrecognized command (\"%s\")",                                                  // 52
+	"Invalid UTF8 next byte (position: %d, offset: %d, text start: \"%.20s\")",       // 53
+	"Incorrect parameters (%s)",                                                      // 54
+	"Can not parse JSON (error: \"%s\", position: %d, text start: \"%.20s\")",        // 55
+	""                                                                                //
 };
 
 char log_error_prefix[STR_SIZE_MAX] = "<error_prefix>";
@@ -167,22 +168,32 @@ void _log_print_char(int stdtype, FILE *stream, char c) {
 	putc(c, stream);
 }
 
-void _log_printf(int stdtype, const char* format, va_list args) {
+void _log_print_str(int stdtype, const char *str) {
 
 	FILE *stream = STDTYPE_STREAM(stdtype);
+
+	for(int i=0; str[i]; i++)
+		_log_print_char(stdtype, stream, str[i]);
+
+    fflush(stream);
+
+}
+
+
+void _log_printf(int stdtype, const char* format, va_list args) {
 
 	char buffer[10*1024];
 	int len = vsnprintf(buffer, sizeof(buffer), format, args);
 
-	int i=0;
-	for(; buffer[i]; i++) {
-		_log_print_char(stdtype, stream, buffer[i]);
+	_log_print_str(stdtype, buffer);
+
+	int buffer_len=strlen(buffer);
+	if (len!=buffer_len) {
+		FILE *stream = STDTYPE_STREAM(stdtype);
+		fprintf(stream, "...[%d more]", len-buffer_len);
+		fflush(stream);
 	}
 
-	if (i!=len)
-		fprintf(stream, "...[%d more]", len-i);
-
-    fflush(stream);
 }
 
 void log_stdout_println(const char* format, ...) {
@@ -249,10 +260,10 @@ void log_stdout_print_header(char *program_desc) {
 
 void log_stdout_print_and_exit(int result) {
 	thread_mutex_lock(&log_mutex);
-	_log_printf(STDTYPE_OUT, "\n\n", NULL);
+	_log_print_str(STDTYPE_OUT, "\n\n");
 	if (!_log_header_printed) {
-		_log_printf(STDTYPE_OUT, result==0 ? "completed successfully" : result==1 ? "completed with errors" : "not completed due to errors", NULL);
-		_log_printf(STDTYPE_OUT, "\n", NULL);
+		_log_print_str(STDTYPE_OUT, result==0 ? "completed successfully" : result==1 ? "completed with errors" : "not completed due to errors");
+		_log_print_str(STDTYPE_OUT, "\n");
 	}
 	if (log_file_name[0]==0)
 		fprintf(stdout, "\n\n");

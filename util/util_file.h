@@ -5,14 +5,10 @@
 #define FILE_SEPARATOR  "\\"
 #define PATH_SEPARATOR  ";"
 #define OS_NAME         "windows"
-#define EOL             "\r\n"
-#define EOL_LEN         2
 #else
 #define FILE_SEPARATOR  "/"
 #define PATH_SEPARATOR  ":"
 #define OS_NAME         "linux"
-#define EOL             "\n"
-#define EOL_LEN         1
 #endif
 
 typedef struct

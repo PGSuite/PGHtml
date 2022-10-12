@@ -23,17 +23,25 @@ int file_body_init(FILE_BODY *file_body) {
 	return 0;
 }
 
-void file_body_free(FILE_BODY *file_body) {
+int file_body_free(FILE_BODY *file_body) {
 	if (file_body->body==NULL) {
 		log_stderr_print(51);
-		return;
+		return 1;
 	}
 	free(file_body->body);
 	file_body->body = NULL;
 	file_body->size_max = -1;
 	file_body->size = -1;
+	return 0;
 }
 
+int file_body_replace(FILE_BODY *file_body_dest, FILE_BODY *file_body_source) {
+	if(file_body_free(file_body_dest)) return 1;
+	file_body_dest->body =     file_body_source->body;
+	file_body_dest->size =     file_body_source->size;
+	file_body_dest->size_max = file_body_source->size_max;
+	return 0;
+}
 
 int file_read(char *path, FILE_BODY *file_body) {
     FILE * file = fopen(path,"rb");
@@ -155,11 +163,6 @@ int file_body_add_str(FILE_BODY *file_body, ...) {
 
 }
 
-int file_body_add_eol(FILE_BODY *file_body) {
-	return file_body_add_str(file_body, EOL, NULL);
-}
-
-
 int file_is_dir(char *path, int *is_dir) {
 	struct stat path_stat;
 	if (stat(path, &path_stat)) {
@@ -183,7 +186,7 @@ int file_extension(char *extension, int extension_size, char *filepath) {
 		extension[0]=0;
 		return 0;
 	}
-	return str_substr(extension, extension_size, filepath, i+1, strlen(filepath)-i-1);
+	return str_substr(extension, extension_size, filepath, i+1, strlen(filepath)-1);
 }
 
 int file_filename(char *filename, int filename_size, char *filepath) {
@@ -192,7 +195,7 @@ int file_filename(char *filename, int filename_size, char *filepath) {
 		if (filepath[--i]==FILE_SEPARATOR[0]) break;
 	if (i<0)
 		return str_copy(filename, filename, filepath);
-	return str_substr(filename, filename_size, filepath, i+1, strlen(filepath)-i-1);
+	return str_substr(filename, filename_size, filepath, i+1, strlen(filepath)-1);
 }
 
 

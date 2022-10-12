@@ -1,7 +1,7 @@
-#include "util_str.h"
-
 #include <stdarg.h>
 #include <strings.h>
+
+#include "util_str.h"
 
 
 int str_find(char *body, int body_size, int pos, char *substr, int ignore_case) {
@@ -34,18 +34,18 @@ int str_find_char_html(char *html, int html_size, int pos, char c) {
 	return -1;
 }
 
-int str_substr(char *dest, int dest_size, char *source, int pos, int len) {
-	if (len<=0) {
-		dest[0] = 0;
-		return 0;
+int str_substr(char *dest, int dest_size, char *source, int pos_begin, int pos_end) {
+	if(pos_begin<0 || pos_end<0 || pos_begin>pos_end) {
+		log_stderr_print(54, "str_substr");
+		return 1;
 	}
+	int len = pos_end-pos_begin+1;
 	if (len>=dest_size) {
 		log_stderr_print(5, dest_size, len+1);
 		return 1;
 	}
-	for(int i=0; i<len; i++) {
-		dest[i] = source[pos+i];
-	}
+	for(int i=0; i<len; i++)
+		dest[i] = source[pos_begin+i];
 	dest[len] = 0;
 	return 0;
 }
@@ -61,35 +61,6 @@ int str_copy(char *dest, int dest_size, char *source) {
 	}
 	return 0;
 }
-
-/*
-int str_add(char *dest, int dest_size, char *source) {
-	int dest_len = strlen(dest);
-	int source_len = strlen(source);
-	if ( (dest_len+source_len)>=dest_size ) {
-		log_stderr_print(5, dest_size, dest_len+source_len+1);
-		return 1;
-	}
-	for(int i=0; i<=source_len; i++) {
-		dest[dest_len+i] = source[i];
-	}
-	return 0;
-}
-
-int str_add_n(char *dest, int dest_size, int n, ...) {
-	char *s;
-    va_list args;
-    va_start(args, &n);
-
-    for(int i=0; i<n; i++) {
-    	s = va_arg(args, char *);
-
-    	if (str_add(dest, dest_size, s)!=0) return 1;
-    }
-    va_end(args);
-    return 0;
-}
-*/
 
 int str_add(char *dest, int dest_size, ...) {
 
@@ -178,7 +149,7 @@ int str_tag_attributes(char *tag, STR_MAP *attributes) {
 				return 1;
 			}
 			pos_begin++;
-			if (str_substr(attributes->keys[attributes->size], sizeof(attributes->keys[0]), tag, pos_begin, pos_end-pos_begin+1))
+			if (str_substr(attributes->keys[attributes->size], sizeof(attributes->keys[0]), tag, pos_begin, pos_end))
 				return 1;
 			for(pos_begin = pos+1; pos_begin<tag_len && (tag[pos_begin]==' ' || tag[pos_begin]=='\t');  pos_begin++);
 			if (pos_begin==tag_len || (tag[pos_begin]!='"' && tag[pos_begin]!='\'')  ) {
@@ -190,7 +161,7 @@ int str_tag_attributes(char *tag, STR_MAP *attributes) {
 				log_stderr_print(7, pos, tag);
 				return 1;
 			}
-			if (str_substr(attributes->values[attributes->size], sizeof(attributes->values[0]), tag, pos_begin+1, pos_end-pos_begin-1))
+			if (str_substr(attributes->values[attributes->size], sizeof(attributes->values[0]), tag, pos_begin+1, pos_end-1))
 				return 1;
 			attributes->size++;
 		}
@@ -217,9 +188,9 @@ int str_map_put(STR_MAP *map, char *key, char *value) {
 		}
 		index = map->size++;
 	}
-	if (str_substr(map->keys[index], sizeof(map->keys[0]), key, 0, strlen(key)))
+	if (str_copy(map->keys[index], sizeof(map->keys[0]), key))
 		return 1;
-	if (str_substr(map->values[index], sizeof(map->values[0]), value, 0, strlen(value)))
+	if (str_copy(map->values[index], sizeof(map->values[0]), value))
 		return 1;
 	return 0;
 }
@@ -233,7 +204,7 @@ int str_list_add(STR_LIST *list, char *value) {
 		log_stderr_print(20, STR_COLLECTION_SIZE_MAX, value);
 		return 1;
 	}
-	if (str_substr(list->values[list->size], sizeof(list->values[0]), value, 0, strlen(value)))
+	if (str_copy(list->values[list->size], sizeof(list->values[0]), value))
 		return 1;
 	list->size++;
 	return 0;
@@ -291,3 +262,42 @@ int str_list_print(STR_LIST *list, char delimeter, char *prefix) {
 	log_stdout_printf("%s%s", prefix, values);
 	return 0;
 }
+
+
+int str_utf8_next(char *str, int *i) {
+
+	if ((str[*i] & 0x80) == 0x00) {
+		(*i)++;
+		return 0;
+	};
+
+	int len;
+	if ((str[*i] & 0xE0) == 0xC0) len=2;
+	else if ((str[*i] & 0xF0) == 0xE0) len=3;
+	else if ((str[*i] & 0xF8) == 0xF0) len=4;
+	else if ((str[*i] & 0xFC) == 0xF8) len=5;
+	else if ((str[*i] & 0xFE) == 0xFC) len=6;
+	else {
+		log_stderr_print(15, *i, str);
+		return 1;
+	}
+	for(int j=1; j<len; j++)
+		if ((str[*i+j] & 0xC0) != 0x80) {
+			log_stderr_print(53, *i, j, str);
+			return 1;
+		}
+	*i = *i+len;
+	return 0;
+}
+
+
+/*
+	FILE_BODY f;
+	file_read("r:\\t.txt", &f);
+	printf("%d %s\n", f.size, f.body );
+
+	for(int i=0; i<f.size;) {
+		printf("%d\n", i);
+		if(str_utf8_next(f.body, &i)) return 1;
+	}
+*/

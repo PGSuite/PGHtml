@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
 		}
 		else if (strlen(argv[i])>3 && argv[i][1]=='G' && argv[i][2]=='_') {
 		    char g_var_name[STR_SIZE_MAX];
-		    if (str_substr(g_var_name, sizeof(g_var_name), argv[i], 1, strlen(argv[i])-1))
+		    if (str_substr(g_var_name, sizeof(g_var_name), argv[i], 1, strlen(argv[i])))
 				log_stdout_print_and_exit(2);
 			if (str_map_put(&g_vars, g_var_name, argv[++i]))
 				log_stdout_print_and_exit(2);
@@ -147,7 +147,8 @@ int main(int argc, char *argv[])
 
 	pg_disconnect(pg_conn);
 
-	if (file_list_updates_close()) result=1;
+	if (file_list_updates_close())
+		log_stdout_print_and_exit(2);
 
 	log_stdout_print_and_exit(result);
 

@@ -104,10 +104,10 @@ int tcp_set_socket_timeout(TCP_SOCKET_T socket) {
 	return 0;
 }
 
-int tcp_recv_text(TCP_SOCKET_T socket, char *text, int text_size) {
-	size_t text_len=0;
+int tcp_recv_str(TCP_SOCKET_T socket, char *str, int str_size) {
+	size_t str_len=0;
 	do {
-		int recv_len = recv(socket, text+text_len, text_size-text_len, 0);
+		int recv_len = recv(socket, str+str_len, str_size-str_len, 0);
 		if (recv_len==0
 		#ifdef _WIN32
 			|| (recv_len<0 && TCP_ERRNO==10060)
@@ -120,15 +120,16 @@ int tcp_recv_text(TCP_SOCKET_T socket, char *text, int text_size) {
 			log_stderr_print(45, TCP_ERRNO);
 			return -1;
 		}
-		if (text_len+recv_len>=text_size) {
-			log_stderr_print(5, text_size, text_size+1);
+		if (str_len+recv_len>str_size) {
+			log_stderr_print(5, str_size, str_len+recv_len);
 			return 1;
 		}
-		text_len += recv_len;
-	} while(text_len<4 || text[text_len-4]!=13 || text[text_len-3]!=10 || text[text_len-2]!=13 || text[text_len-1]!=10);
-	text[text_len] = 0;
+		str_len += recv_len;
+	} while(str[str_len-1]!=0);
 	return 0;
 }
+
+
 
 int tcp_send(TCP_SOCKET_T socket, char *body, int size) {
 	while (size>0) {
@@ -143,8 +144,8 @@ int tcp_send(TCP_SOCKET_T socket, char *body, int size) {
 	return 0;
 }
 
-int tcp_send_text(TCP_SOCKET_T socket, char *text) {
-	return tcp_send(socket, text, strlen(text));
+int tcp_send_str(TCP_SOCKET_T socket, char *str, int end_zero) {
+	return tcp_send(socket, str, strlen(str)+(end_zero ? 1 : 0));
 }
 
 int tcp_send_file_body(TCP_SOCKET_T socket, FILE_BODY file_body) {
