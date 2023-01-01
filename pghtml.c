@@ -3,9 +3,7 @@
 #include <libpq-fe.h>
 
 #include "globals.h"
-
-#include "util/util_str.h"
-#include "util/util_file.h"
+#include "util/utils.h"
 
 #define PROGRAM_DESC "PGHtml is utility for creation an html files using data from PostgreSQL"
 
@@ -49,7 +47,7 @@ char HELP[] =
 int main(int argc, char *argv[])
 {
 
-	log_initialize("PGHTML-");
+	utils_initialize("PGHTML-");
 
 	if (argc==1 || strcmp(argv[1],"-h")==0 || strcmp(argv[1],"-help")==0 || strcmp(argv[1],"--help")==0 || strcmp(argv[1],"help")==0) {
 		log_stdout_print_header(PROGRAM_DESC);
@@ -65,11 +63,11 @@ int main(int argc, char *argv[])
 	char *db_name             = "";
 	char *db_user             = NULL;
 	char *db_password         = NULL;
-	char db_uri[STR_SIZE_MAX] = "";
+	char db_uri[STR_SIZE] = "";
 
 	char *extentions  = NULL;
 
-	g_vars.size=0;
+	g_vars.len=0;
 
 	str_list_clear(&directories);
 
@@ -94,7 +92,7 @@ int main(int argc, char *argv[])
 				log_stdout_print_and_exit(2);
 		}
 		else if (strlen(argv[i])>3 && argv[i][1]=='G' && argv[i][2]=='_') {
-		    char g_var_name[STR_SIZE_MAX];
+		    char g_var_name[STR_SIZE];
 		    if (str_substr(g_var_name, sizeof(g_var_name), argv[i], 1, strlen(argv[i])))
 				log_stdout_print_and_exit(2);
 			if (str_map_put(&g_vars, g_var_name, argv[++i]))
@@ -110,7 +108,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (directories.size==0) {
+	if (directories.len==0) {
 		log_stderr_print(4);
 		log_stdout_print_and_exit(2);
 	}
@@ -119,8 +117,8 @@ int main(int argc, char *argv[])
 		log_stdout_print_and_exit(2);
 
     if (extentions==NULL) extentions = FILE_EXTENTIONS_DEFAULT;
-    if (str_list_split(&file_extensions, extentions, FILE_EXTENTIONS_SEPARATOR[0])) return 1;
-    for(int i=0; i<file_extensions.size; i++)
+    if (str_list_split(&file_extensions, extentions, 0, -1, FILE_EXTENTIONS_SEPARATOR[0])) return 1;
+    for(int i=0; i<file_extensions.len; i++)
     	if (strlen(file_extensions.values[i])<3 || file_extensions.values[i][0]!='p' || file_extensions.values[i][1]!='g') {
     		log_stderr_print(22, file_extensions.values[i]);
     		return 1;
@@ -134,7 +132,7 @@ int main(int argc, char *argv[])
     }
 
     log_stdout_println("global variables:  ");
-    for(int i=0; i<g_vars.size; i++)
+    for(int i=0; i<g_vars.len; i++)
     	log_stdout_printf("%s%s", i==0 ? "" : ",", g_vars.keys[i]);
 
     log_stdout_println("libpq version:     %d", PQlibVersion());

@@ -2,9 +2,9 @@
 
 #include "globals.h"
 
-STR_LIST directories;
-STR_LIST file_extensions;
+str_list directories;
+str_list file_extensions;
 
-STR_MAP g_vars;
+str_map g_vars;
 
 PGconn *pg_conn;

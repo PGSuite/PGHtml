@@ -13,16 +13,15 @@
 
 #endif
 
-#include "util_thread.h"
+#include "utils.h"
 
 #define THREADS_SIZE        1000
-#define THREAD_PRINT_FORMAT "%-11s "
 
-THREAD_T threads[THREADS_SIZE];
+thread threads[THREADS_SIZE];
 
-THREAD_MUTEX_T threads_mutex;
+thread_mutex threads_mutex;
 
-int thread_mutex_init_try(THREAD_MUTEX_T *mutex) {
+int _thread_mutex_init_try(thread_mutex *mutex) {
 	#ifdef _WIN32
 		*mutex = CreateMutex(NULL, FALSE, NULL);
 		return *mutex==NULL;
@@ -31,14 +30,23 @@ int thread_mutex_init_try(THREAD_MUTEX_T *mutex) {
 	#endif
 }
 
-void thread_mutex_init(THREAD_MUTEX_T *mutex) {
-	if (thread_mutex_init_try(mutex)) {
+int thread_mutex_init(thread_mutex *mutex) {
+	if (_thread_mutex_init_try(mutex)) {
 		log_stderr_print(36);
-		log_stdout_print_and_exit(2);
+		return 1;
 	}
+	return 0;
 }
 
-void thread_mutex_lock(THREAD_MUTEX_T *mutex) {
+void thread_mutex_destroy(thread_mutex *mutex) {
+	#ifdef _WIN32
+		CloseHandle(*mutex);
+	#else
+		pthread_mutex_destroy(mutex);
+	#endif
+}
+
+void thread_mutex_lock(thread_mutex *mutex) {
 	#ifdef _WIN32
 		if (WaitForSingleObject(*mutex, -1)) {
 	#else
@@ -49,7 +57,7 @@ void thread_mutex_lock(THREAD_MUTEX_T *mutex) {
 		}
 }
 
-void thread_mutex_unlock(THREAD_MUTEX_T *mutex) {
+void thread_mutex_unlock(thread_mutex *mutex) {
 	#ifdef _WIN32
 		if (!ReleaseMutex(*mutex)) {
 	#else
@@ -60,17 +68,19 @@ void thread_mutex_unlock(THREAD_MUTEX_T *mutex) {
 		}
 }
 
-
-void thread_initialize() {
-	thread_mutex_init(&threads_mutex);
+void _thread_initialize(char *error_prefix) {
+	if (_thread_mutex_init_try(&threads_mutex))
+		_log_error_init_mutex("threads_mutex");
 	threads[0].used = 1;
 	threads[0].id =	CURRENT_THREAD_ID;
-	str_copy(threads[0].name, sizeof(threads[0].name), "MAIN");
+	threads[0].last_error_code = 0;
+	threads[0].last_error_text[0] = 0;
+	if(str_copy(threads[0].name, sizeof(threads[0].name), "MAIN")) exit(2);
 	for(int i=1; i<THREADS_SIZE; i++)
 		threads[i].used = 0;
 }
 
-int thread_create(void *function, char *name, TCP_SOCKET_T socket_connection) {
+int thread_create(void *function, char *name, tcp_socket socket_connection) {
 
 	int thread_index;
 
@@ -81,31 +91,31 @@ int thread_create(void *function, char *name, TCP_SOCKET_T socket_connection) {
 		log_stdout_println("too many running threads, waiting");
 		sleep(1);
 	};
+	threads[thread_index].used = 1;
 	thread_mutex_unlock(&threads_mutex);
 
-	threads[thread_index].used = 1;
 	if (str_copy(threads[thread_index].name, sizeof(threads[0].name), name)) {
 		threads[thread_index].used = 0;
 		return 1;
 	}
 	threads[thread_index].socket_connection = socket_connection;
 	#ifdef _WIN32
-		THREAD_SYS_T thread_sys = CreateThread(NULL, 0, function, thread_index, 0, NULL);
-		if (thread_sys == NULL) {
+		threads[thread_index].sys_id = CreateThread(NULL, 0, function, thread_index, 0, NULL);
+		if (threads[thread_index].sys_id == NULL) {
 	#else
-		THREAD_SYS_T thread_sys;
-		if (pthread_create(&thread_sys, NULL, function, thread_index) != 0) {
+		if (pthread_create(&threads[thread_index].sys_id, NULL, function, thread_index) != 0) {
 	#endif
 			threads[thread_index].used = 0;
 			log_stderr_print(26, name);
 			return 1;
 		}
-	threads[thread_index].thread_sys = thread_sys;
+	threads[thread_index].last_error_code = 0;
+	threads[thread_index].last_error_text[0] = 0;
 	return 0;
 
 }
 
-TCP_SOCKET_T thread_get_socket_connection(void *thread_args) {
+tcp_socket thread_get_socket_connection(void *thread_args) {
 
 	int thread_index = thread_args;
 	return threads[thread_index].socket_connection;
@@ -117,7 +127,7 @@ void thread_begin(void *thread_args) {
 
 	int thread_index = thread_args;
 
-	threads[thread_index].id =	CURRENT_THREAD_ID;
+	threads[thread_index].id = CURRENT_THREAD_ID;
 
 	log_stdout_println("thread \"%s\" started", threads[thread_index].name);
 
@@ -135,14 +145,39 @@ void thread_end(void *thread_args) {
 
 }
 
-void thread_print_name(FILE *stream) {
+int thread_get_current(thread **thread_current) {
 	unsigned int current_id = CURRENT_THREAD_ID;
 	for(int i=0; i<THREADS_SIZE; i++)
 		if (threads[i].used && threads[i].id==current_id) {
-			fprintf(stream, THREAD_PRINT_FORMAT, threads[i].name);
-			return;
+			*thread_current = &threads[i];
+			return 0;
 		}
-	fprintf(stream, THREAD_PRINT_FORMAT, "<NOT_FOUND>");
+	*thread_current = NULL;
+	return -1;
+}
+
+int thread_set_last_erorr(int error_code, char *error_text) {
+	if (error_code==LOG_ERROR_NOT_FOUND_CURRENT_THREAD_CODE) return 1;
+	thread *thread_current;
+	if(thread_get_current(&thread_current)) {
+		log_stderr_print(LOG_ERROR_NOT_FOUND_CURRENT_THREAD_CODE);
+		return 1;
+	}
+	thread_current->last_error_code = error_code;
+	if(str_copy(thread_current->last_error_text, LOG_ERROR_TEXT_SIZE, error_text)) return 1;
+	return 0;
+}
+
+int thread_get_last_error(int *error_code, char *error_text, int error_text_size) {
+	thread *thread_current;
+	if(thread_get_current(&thread_current)) {
+		log_stderr_print(*error_code = LOG_ERROR_NOT_FOUND_CURRENT_THREAD_CODE);
+		if(str_copy(error_text, error_text_size, LOG_ERROR_NOT_FOUND_CURRENT_THREAD_TEXT)) return 1;
+		return 1;
+	}
+	*error_code = thread_current->last_error_code;
+	if(str_copy(error_text, error_text_size, thread_current->last_error_text)) return 1;
+	return 0;
 }
 
 int thread_get_count() {
