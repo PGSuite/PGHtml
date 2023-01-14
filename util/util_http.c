@@ -27,7 +27,7 @@ int _http_recv_var(tcp_socket socket_connection, char *buffer, int buffer_len, i
 			return 0;
 		}
 		if (*var_len+2>var_size) {
-			log_stderr_print(5, var_size, *var_len+2);
+			log_error(5, var_size, *var_len+2);
 			http_send_error(socket_connection, HTTP_STATUS_INTERNAL_ERROR);
 			return 1;
 		}
@@ -54,11 +54,11 @@ int http_recv_request(tcp_socket socket_connection, http_request *request) {
 			|| (buffer_len<0 && tcp_errno==10060)
 		#endif
 		) {
-			log_stderr_print(33, TCP_TIMEOUT);
+			log_error(33, TCP_TIMEOUT);
 			return -1;
 		}
 		if (buffer_len<0) {
-			log_stderr_print(45, tcp_errno);
+			log_error(45, tcp_errno);
 			return -1;
 		}
 		int i=0;
@@ -104,7 +104,7 @@ int http_recv_request(tcp_socket socket_connection, http_request *request) {
 			}
 		}
 	} while(!received_headers || request->content.len<content_len);
-	log_stdout_println("request received, method: %s, path: \"%s\", content length: %d", request->method, request->path, request->content.len);
+	log_info("request received, method: %s, path: \"%s\", content length: %d", request->method, request->path, request->content.len);
 	return 0;
 }
 
@@ -130,7 +130,7 @@ int http_send_response(tcp_socket socket_connection, int status_code, char *cont
 
 	if (tcp_send(socket_connection, content, content_length)) return 1;
 
-	log_stdout_println("response sent, status: %d", status_code);
+	log_info("response sent, status: %d", status_code);
 
 	return 0;
 

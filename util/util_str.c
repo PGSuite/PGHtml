@@ -34,15 +34,11 @@ int str_find_char_html(char *html, int html_size, int pos, char c) {
 }
 
 int str_substr(char *dest, int dest_size, char *source, int pos_begin, int pos_end) {
-	if(pos_begin<0 || pos_end<0 || pos_begin>pos_end) {
-		log_stderr_print(54, "str_substr");
-		return 1;
-	}
+	if(pos_begin<0 || pos_end<0 || pos_begin>pos_end)
+		return log_error(54, "str_substr");
 	int len = pos_end-pos_begin+1;
-	if (len>=dest_size) {
-		log_stderr_print(5, dest_size, len+1);
-		return 1;
-	}
+	if (len>=dest_size)
+		return log_error(5, dest_size, len+1);
 	for(int i=0; i<len; i++)
 		dest[i] = source[pos_begin+i];
 	dest[len] = 0;
@@ -51,10 +47,8 @@ int str_substr(char *dest, int dest_size, char *source, int pos_begin, int pos_e
 
 int str_copy(char *dest, int dest_size, char *source) {
 	int source_len = strlen(source);
-	if ( source_len>=dest_size ) {
-		log_stderr_print(5, dest_size, source_len+1);
-		return 1;
-	}
+	if ( source_len>=dest_size )
+		return log_error(5, dest_size, source_len+1);
 	for(int i=0; i<=source_len; i++) {
 		dest[i] = source[i];
 	}
@@ -74,8 +68,7 @@ int str_add(char *dest, int dest_size, ...) {
     	int len = strlen(s);
     	if ( (dest_len+len)>=dest_size ) {
     	    va_end(args);
-    		log_stderr_print(5, dest_size, dest_len+len+1);
-    		return 1;
+    	    return log_error(5, dest_size, dest_len+len+1);
     	}
     	for(int i=0; i<len; i++) {
     		dest[dest_len++] = s[i];
@@ -97,16 +90,14 @@ int str_format(char *dest, int dest_size, char *format, ...) {
 
 	if (len<0) {
 		va_end(args);
-		log_stderr_print(54, "str_format");
-		return 1;
+		return log_error(54, "str_format");
 	}
 
 	int len_dest=strlen(dest);
 
 	if (len!=strlen(dest)) {
 		va_end(args);
-		log_stderr_print( 5, dest_size, len+1);
-		return 1;
+		return log_error( 5, dest_size, len+1);
 	}
 
     va_end(args);
@@ -116,10 +107,8 @@ int str_format(char *dest, int dest_size, char *format, ...) {
 
 int str_insert_char(char *str, int str_size, int pos, char c) {
 	int len = strlen(str);
-	if (len+1>=str_size) {
-		log_stderr_print(5, str_size, len+2);
-		return 1;
-	}
+	if (len+1>=str_size)
+		return log_error(5, str_size, len+2);
 	for(int i=len; i>=pos; i--)
 		str[i+1] = str[i];
 	str[pos] = c;
@@ -186,10 +175,8 @@ int str_unescaped(char *str) {
 }
 
 int str_rtrim(char *dest, int dest_size, int len) {
-	if (len>=dest_size) {
-		log_stderr_print(5, dest_size, len+1);
-		return 1;
-	}
+	if (len>=dest_size)
+		return log_error(5, dest_size, len+1);
 	int i = strlen(dest);
 	if (i>=len) return 0;
 	while(i<len)
@@ -205,29 +192,21 @@ int str_tag_attributes(char *tag, str_map *attributes) {
 	attributes->len = 0;
 	for(int pos=0; pos<tag_len; pos++) {
 		if (tag[pos]=='=') {
-			if (attributes->len==tag_attributes_size_max) {
-				log_stderr_print(6, tag);
-				return 1;
-			}
+			if (attributes->len==tag_attributes_size_max)
+				return log_error(6, tag);
 			for(pos_end = pos-1; pos_end>0 && (tag[pos_end]==' ' || tag[pos_end]=='\t');  pos_end--);
 			for(pos_begin = pos_end-1; pos_begin>0 && tag[pos_begin]!=' ' && tag[pos_begin]!='\t';  pos_begin--);
-			if (pos_begin==0 || pos_end==0) {
-				log_stderr_print(7, pos, tag);
-				return 1;
-			}
+			if (pos_begin==0 || pos_end==0)
+				return log_error(7, pos, tag);
 			pos_begin++;
 			if (str_substr(attributes->keys[attributes->len], sizeof(attributes->keys[0]), tag, pos_begin, pos_end))
 				return 1;
 			for(pos_begin = pos+1; pos_begin<tag_len && (tag[pos_begin]==' ' || tag[pos_begin]=='\t');  pos_begin++);
-			if (pos_begin==tag_len || (tag[pos_begin]!='"' && tag[pos_begin]!='\'')  ) {
-				log_stderr_print(7, pos, tag);
-				return 1;
-			}
+			if (pos_begin==tag_len || (tag[pos_begin]!='"' && tag[pos_begin]!='\'')  )
+				return log_error(7, pos, tag);
 			for(pos_end = pos_begin+1; pos_end<tag_len && tag[pos_end]!=tag[pos_begin]; pos_end++);
-			if (pos_end==tag_len) {
-				log_stderr_print(7, pos, tag);
-				return 1;
-			}
+			if (pos_end==tag_len)
+				return log_error(7, pos, tag);
 			if (str_substr(attributes->values[attributes->len], sizeof(attributes->values[0]), tag, pos_begin+1, pos_end-1))
 				return 1;
 			attributes->len++;
@@ -249,10 +228,8 @@ int str_map_index(str_map *map, char *key) {
 int str_map_put(str_map *map, char *key, char *value) {
 	int index = str_map_index(map, key);
 	if (index==-1) {
-		if (map->len>=STR_COLLECTION_SIZE) {
-			log_stderr_print(24, STR_COLLECTION_SIZE, key, value);
-			return 1;
-		}
+		if (map->len>=STR_COLLECTION_SIZE)
+			return log_error(24, STR_COLLECTION_SIZE, key, value);
 		index = map->len++;
 	}
 	if (str_copy(map->keys[index], sizeof(map->keys[0]), key))
@@ -267,10 +244,8 @@ void str_list_clear(str_list *list) {
 }
 
 int str_list_add(str_list *list, char *value) {
-	if (list->len>=STR_COLLECTION_SIZE) {
-		log_stderr_print(20, STR_COLLECTION_SIZE, value);
-		return 1;
-	}
+	if (list->len>=STR_COLLECTION_SIZE)
+		return log_error(20, STR_COLLECTION_SIZE, value);
 	if (str_copy(list->values[list->len], sizeof(list->values[0]), value))
 		return 1;
 	list->len++;
@@ -288,10 +263,8 @@ int str_list_split(str_list *list, char *data, int pos_begin, int pos_end, char 
 			if (str_list_add(list, value)) return 1;
 			value_size=0;
 		} else {
-			if (value_size>=STR_COLLECTION_VALUE_SIZE-1) {
-				log_stderr_print(21, STR_COLLECTION_VALUE_SIZE, data);
-				return 1;
-			}
+			if (value_size>=STR_COLLECTION_VALUE_SIZE-1)
+				return log_error(21, STR_COLLECTION_VALUE_SIZE, data);
 			value[value_size++]=data[pos];
 		}
 		value[value_size]=0;
@@ -300,61 +273,33 @@ int str_list_split(str_list *list, char *data, int pos_begin, int pos_end, char 
 	return 0;
 }
 
-/*
-int str_list_split(str_list *list, char *values, char delimeter) {
-	str_list_clear(list);
-	int values_len = strlen(values);
-	char value[STR_COLLECTION_VALUE_SIZE];
-	int value_size = 0;
-	value[value_size]=0;
-	for (int i=0; values[i]!=0; i++) {
-		if (values[i]==delimeter) {
-			if (str_list_add(list, value)) return 1;
-			value_size=0;
-		} else {
-			if (value_size>=STR_COLLECTION_VALUE_SIZE-1) {
-				log_stderr_print(21, STR_COLLECTION_VALUE_SIZE, value);
-				return 1;
-			}
-			value[value_size++]=values[i];
+int str_list_println(str_list *list, char delimeter, char *prefix) {
+	stream info;
+	stream_init(&info);
+	for(int i=0; i<list->len; i++) {
+		if ( (i>0 && stream_add_char(&info, delimeter)) || stream_add_str(&info, list->values[i], NULL)) {
+			stream_free(&info);
+			return 1;
 		}
-		value[value_size]=0;
 	}
-	if (str_list_add(list, value)) return 1;
-	return 0;
-}
-*/
-
-
-int str_list_agg(str_list *list, char *values, int values_size, char delimeter) {
-	int values_len = 0;
-    for(int i=0; i<list->len; i++) {
-    	if (i>0) {
-    		if (values_len>=values_size-1) {
-    			log_stderr_print(5, values_size, values_size+1);
-    			return 1;
-    		}
-    		values[values_len++] = delimeter;
-    	}
-    	for(int j=0; list->values[i][j]; j++) {
-    		if (values_len>=values_size-1) {
-    			log_stderr_print(5, values_size, values_size+1);
-    			return 1;
-    		}
-    		values[values_len++] = list->values[i][j];
-    	}
-    }
-    values[values_len] = 0;
+	log_info("%s%s", prefix, info.data);
+	stream_free(&info);
 	return 0;
 }
 
-int str_list_print(str_list *list, char delimeter, char *prefix) {
-	char values[32000];
-	if (str_list_agg(list, values, sizeof(values), delimeter)) return 1;
-	log_stdout_printf("%s%s", prefix, values);
+int str_map_println(str_map *map, char delimeter, char *prefix) {
+	stream info;
+	stream_init(&info);
+	for(int i=0; i<map->len; i++) {
+		if ( (i>0 && stream_add_char(&info, delimeter)) || stream_add_str(&info, map->keys[i], "=", NULL) || stream_add_str_escaped(&info, map->values[i])) {
+			stream_free(&info);
+			return 1;
+		}
+	}
+	log_info("%s%s", prefix, info.data);
+	stream_free(&info);
 	return 0;
 }
-
 
 int str_utf8_next(char *str, int *i) {
 
@@ -369,15 +314,10 @@ int str_utf8_next(char *str, int *i) {
 	else if ((str[*i] & 0xF8) == 0xF0) len=4;
 	else if ((str[*i] & 0xFC) == 0xF8) len=5;
 	else if ((str[*i] & 0xFE) == 0xFC) len=6;
-	else {
-		log_stderr_print(15, *i, str);
-		return 1;
-	}
+	else return log_error(15, *i, str);
 	for(int j=1; j<len; j++)
-		if ((str[*i+j] & 0xC0) != 0x80) {
-			log_stderr_print(53, *i, j, str);
-			return 1;
-		}
+		if ((str[*i+j] & 0xC0) != 0x80)
+			return log_error(53, *i, j, str);
 	*i = *i+len;
 	return 0;
 }

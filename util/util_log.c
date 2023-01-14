@@ -7,10 +7,12 @@
 #include "utils.h"
 #include "util_version.h"
 
-#define STDTYPE_OUT             1
-#define STDTYPE_ERR             2
-#define STDTYPE_STREAM(stdtype) (stdtype==STDTYPE_OUT ? stdout : stderr)
-#define THREAD_NAME_FORMAT      "%-11s "
+#define MSG_EXIT_FATAL "exit due to fatal error"
+#define MSG_EXIT_STOP  "exit due to stopping"
+
+typedef enum {LOG_LEVEL_FATAL, LOG_LEVEL_ERROR, LOG_LEVEL_WARN, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG, LOG_LEVEL_TRACE} log_level;
+const char *LOG_LEVEL_NAMES[] = {"FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"};
+#define LOG_LEVEL_STREAM(level) (level<=1 ? stderr : stdout)
 
 const char *ERRORS[] = {
 	"No error",                                                                       //  0
@@ -22,7 +24,7 @@ const char *ERRORS[] = {
 	"Too many attributes for tag \"%s\"",                                             //  6
 	"Not parse attribute name from position %d of tag \"%s\"",                        //  7
 	"Error open file \"%s\"\n",                                                       //  8
-	"Can not allocate memory (%d bytes)",                                             //  9
+	"Cannot allocate memory (%d bytes)",                                              //  9
 	"Error read file \"%s\"",                                                         // 10
 	"File \"%s\" read partially",                                                     // 11
 	"Error write file \"%s\"",                                                        // 12
@@ -39,57 +41,58 @@ const char *ERRORS[] = {
 	"Too many directories or files (max %d)",                                         // 23
 	"Map size (%d) too small (key=\"%s\",value=\"%s\")",                              // 24
 	"Error (errno %d) open log file \"%s\" for %s",                                   // 25
-	"Can not create thread \"%s\"",                                                   // 26
-	"Can not start WSA (errno %d)",                                                   // 27
-	"Can not create socket (errno %d)",                                               // 28
-	"Can not bind socket to port %d (errno %d)",                                      // 29
-	"Can not listen for incoming connections (errno %d)",                             // 30
-	"Can not accept connection (errno %d)",                                           // 31
-	"Can not set timeout (errno %d)",                                                 // 32
+	"Cannot create thread \"%s\"",                                                    // 26
+	"Cannot start WSA (errno %d)",                                                    // 27
+	"Cannot create socket (errno %d)",                                                // 28
+	"Cannot bind socket to port %d (errno %d)",                                       // 29
+	"Cannot listen for incoming connections (errno %d)",                              // 30
+	"Cannot accept connection (errno %d)",                                            // 31
+	"Cannot set timeout (errno %d)",                                                  // 32
 	"No data to recieve from socket (timeout %d sec)",                                // 33
-	"Can not send to socket (errno %d)",                                              // 34
-	"Can not close socket (errno %d)",                                                // 35
-	"Can not initialize mutex",                                                       // 36
-	"Can not lock mutex",                                                             // 37
-	"Can not unlock mutex",                                                           // 38
+	"Cannot send to socket (errno %d)",                                               // 34
+	"Cannot close socket (errno %d)",                                                 // 35
+	"Cannot initialize mutex",                                                        // 36
+	"Cannot lock mutex",                                                              // 37
+	"Cannot unlock mutex",                                                            // 38
 	"Incorrect administration command \"%s\"",                                        // 39
 	"SQL query executed without returning data (query start: \"%.20s\")",             // 40
 	"Not option \"%s\"",                                                              // 41
 	"Incorrect port number \"%s\"",                                                   // 42
-	"Can not connect to %s:%d (errno %d)",                                            // 43
+	"Cannot connect to %s:%d (errno %d)",                                             // 43
 	"Process not stopped (administration socket not closed)",                         // 44
 	"Error on recieved data from socket (errno %d)",                                  // 45
 	"Too many (%d) program arguments",                                                // 46
-	"Can not create process (errno %d), command:\n%s",                                // 47
-	"Can not initialize mutex \"%s\"",                                                // 48
-	"Can not create directory \"%s\" (errno %d)",                                     // 49
-	"Can not get stat for path \"%s\" (errno %d)",                                    // 50
+	"Cannot create process (errno %d), command:\n%s",                                 // 47
+	"Cannot initialize mutex \"%s\"",                                                 // 48
+	"Cannot create directory \"%s\" (errno %d)",                                      // 49
+	"Cannot get stat for path \"%s\" (errno %d)",                                     // 50
 	"Stream data is null (memory not allocated)",                                     // 51
 	"Unrecognized command (\"%s\")",                                                  // 52
 	"Invalid UTF8 next byte (position: %d, offset: %d, text start: \"%.20s\")",       // 53
 	"Incorrect parameters (%s)",                                                      // 54
-	"Can not parse JSON (error: \"%s\", start position: %d, text: \"%.20s\")",        // 55
+	"Cannot parse JSON (error: \"%s\", start position: %d, text: \"%.20s\")",         // 55
 	"JSON is null (memory not allocated)",                                            // 56
-	"Can not find JSON value (value type: %d, path: \"%s\", start text: \"%.20s\")",  // 57
+	"Cannot find JSON value (value type: %d, path: \"%s\", start text: \"%.20s\")",   // 57
 	LOG_ERROR_NOT_FOUND_CURRENT_THREAD_TEXT,                                          // 58
 	"Too many database сonnections (%d)",                                             // 59
 	"Invalid database сonnection id (\"%s\")",                                        // 60
-	"Can not find database сonnection (id: \"%s\")",                                  // 61
+	"Cannot find database сonnection (id: \"%s\")",                                   // 61
 	"Database сonnection error: \n%s",                                                // 62
 	"JSON array index out of range (index: %d, array size: %d)",                      // 63
 	"JSON value type (%d) is not STRING",                                             // 64
 	"Too many SQL parameters (%d)",                                                   // 65
-	"SQL query return empty data (query start: \"%.20s\")",                           // 66
+	"SQL query returned empty data (query start: \"%.20s\")",                         // 66
 	"Invalid request path (\"%s\")",                                                  // 67
 	"Too many table columns (%d)",                                                    // 68
 	"Too many indexes (%d)",                                                          // 69
 	"Too many index columns (%d)",                                                    // 70
-	"Can not mapping type \"%s\" to JavaScript",                                      // 71
-	"Can not parse interval from \"%s\"",                                             // 72
-	"Can not convert date value \"%.*s\" into ISO8601 string",                        // 73
-	"Can not convert value \"%s\" into interval",                                     // 74
+	"Cannot mapping type \"%s\" to JavaScript",                                       // 71
+	"Cannot parse interval from \"%s\"",                                              // 72
+	"Cannot convert date value \"%.*s\" into ISO8601 string",                         // 73
+	"Cannot convert value \"%s\" into interval",                                      // 74
 	"Too many columns in result query (%d)",                                          // 75
 	"Undefined value function for column \"%s\" (type oid: %d)",                      // 76
+	"SQL query returned more than one row (query start: \"%.20s\")",                  // 77
 	"Unrecognized error"                                                              //
 };
 
@@ -97,19 +100,16 @@ time_t log_time_started;
 
 char log_error_prefix[32] = "<ERROR_PREFIX>-";
 int  log_error_count = 0;
-int  log_prefix_timestamp = 0;
-int  log_prefix_stdtype   = 0;
-int  log_prefix_thread    = 0;
+int  log_prefix = 0;
 char log_file_name[STR_SIZE] = "";
 FILE log_file;
-
-int _log_header_printed = 0;
 
 thread_mutex log_mutex;
 
 void _log_error_init_mutex(char *mutex_name) {
 	fprintf(stderr, "%s%03d ", log_error_prefix, 48);
-	fprintf(ERRORS[48], mutex_name);
+	fprintf(stderr, ERRORS[48], mutex_name);
+	fprintf(stderr, "\n%s\n", MSG_EXIT_FATAL);
 	exit(2);
 }
 
@@ -122,41 +122,6 @@ void _log_initialize(char *error_prefix) {
 		_log_error_init_mutex("log_mutex");
 }
 
-void log_set_prefix(char *value) {
-	log_prefix_timestamp = 0;
-	log_prefix_stdtype   = 0;
-	log_prefix_thread    = 0;
-	int value_len = strlen(value);
-	if (value_len>0 && value[0]=='t') {
-		log_prefix_timestamp = 1;
-	}
-	if (value_len>1 && value[1]=='s') {
-		log_prefix_stdtype = 1;
-	}
-	if (value_len>2 && value[2]=='t') {
-		log_prefix_thread = 1;
-	}
-}
-
-void log_set_file(char *value) {
-	if (!freopen(value, "a", stdout)) {
-		log_stdout_println("");
-		log_stderr_print(25, errno, value, "stdout");
-		exit(2);
-	}
-	fseek(stdout, 0, SEEK_END);
-	if (ftello(stdout)!=0) {
-		fprintf(stdout, "\n");
-	}
-	if (!freopen(value, "a", stderr)) {
-		log_stdout_println(ERRORS[25], errno, value, "stderr");
-		exit(2);
-	}
-	if (str_copy(log_file_name, sizeof(log_file_name), value))
-		exit(2);
-}
-
-
 int log_get_uptime() {
 	time_t t;
 	time(&t);
@@ -167,95 +132,61 @@ int log_get_error_count() {
 	return log_error_count;
 }
 
-void _log_print_line_prefix(int stdtype) {
-	FILE *stream = STDTYPE_STREAM(stdtype);
-	if (log_prefix_timestamp) {
-		struct timeinfo *timeinfo;
-		struct timespec ts;
-		char prefix[STR_SIZE];
-		clock_gettime(0, &ts);
-		timeinfo = localtime(&ts.tv_sec);
-		strftime(prefix,sizeof(prefix),"%Y-%m-%d %H:%M:%S",timeinfo);
-		fprintf(stream, "%s.%03ld ", prefix, ts.tv_nsec/1000000L);
-	}
-	if (log_prefix_stdtype) {
-		fprintf(stream, "%s ", stdtype==STDTYPE_OUT ? "STDOUT" : "STDERR");
-	}
-	if (log_prefix_thread) {
-		thread *thread_current;
-		fprintf(stream, THREAD_NAME_FORMAT, !thread_get_current(&thread_current) ? thread_current->name : "<NOT_FOUND>");
-	}
-	if (log_prefix_timestamp)
-		fputc(' ', stream);
+
+void _log_print_line_prefix(log_level level) {
+	if (!log_prefix) return;
+	struct timeinfo *timeinfo;
+	struct timespec ts;
+	char prefix[STR_SIZE];
+	clock_gettime(0, &ts);
+	timeinfo = localtime(&ts.tv_sec);
+	strftime(prefix,sizeof(prefix),"%Y-%m-%d %H:%M:%S",timeinfo);
+	thread *thread_current;
+	thread_get_current(&thread_current);
+	fprintf(LOG_LEVEL_STREAM(level), "%s.%03ld %-5s %-11s  ", prefix, ts.tv_nsec/1000000L, LOG_LEVEL_NAMES[level], thread_current!=NULL ? thread_current->name : "<NOT_FOUND>");
 }
 
-int _log_first_line = 1;
+void _log_println_str(log_level level, const char *str) {
 
-void _log_print_char(int stdtype, FILE *stream, char c) {
-	if (c=='\n') {
-		if (_log_first_line) {
-			_log_first_line = 0;
-		} else {
-			putc(c, stream);
-			_log_print_line_prefix(stdtype);
-		}
-		return;
+	FILE *stream = LOG_LEVEL_STREAM(level);
+
+	_log_print_line_prefix(level);
+
+	for(int i=0; str[i]; i++) {
+		putc(str[i], stream);
+		if (str[i]=='\n')
+			_log_print_line_prefix(level);
 	}
-	putc(c, stream);
-}
 
-void _log_print_str(int stdtype, const char *str) {
-
-	FILE *stream = STDTYPE_STREAM(stdtype);
-
-	for(int i=0; str[i]; i++)
-		_log_print_char(stdtype, stream, str[i]);
+	putc('\n', stream);
 
     fflush(stream);
 
 }
 
+void _log_println_fmt(log_level level, const char* format, va_list args) {
 
-void _log_printf(int stdtype, const char* format, va_list args) {
+	FILE *stream = LOG_LEVEL_STREAM(level);
 
 	char buffer[10*1024];
-	int len = vsnprintf(buffer, sizeof(buffer), format, args);
-
-	_log_print_str(stdtype, buffer);
+	int len = vsnprintf(buffer, sizeof(buffer)-50, format, args);
 
 	int buffer_len=strlen(buffer);
-	if (len!=buffer_len) {
-		FILE *stream = STDTYPE_STREAM(stdtype);
-		fprintf(stream, "...[%d more]", len-buffer_len);
-		fflush(stream);
-	}
+	if (len!=buffer_len)
+		vsnprintf(buffer+buffer_len, 50, "...[%d more]", len-buffer_len);
+
+	_log_println_str(level, buffer);
 
 }
 
-void log_stdout_println(const char* format, ...) {
+void log_info(const char* format, ...) {
 
 	thread_mutex_lock(&log_mutex);
 
     va_list args;
     va_start(args, format);
 
-    _log_print_char(STDTYPE_OUT, stdout, '\n');
-    _log_printf(STDTYPE_OUT, format, args);
-
-    va_end(args);
-
-	thread_mutex_unlock(&log_mutex);
-
-}
-
-void log_stdout_printf(const char* format, ...) {
-
-	thread_mutex_lock(&log_mutex);
-
-    va_list args;
-    va_start(args, format);
-
-    _log_printf(STDTYPE_OUT, format, args);
+    _log_println_fmt(LOG_LEVEL_INFO, format, args);
 
     va_end(args);
 
@@ -264,34 +195,41 @@ void log_stdout_printf(const char* format, ...) {
 }
 
 void log_stdout_print_header(char *program_desc) {
-	_log_first_line=0;
-	_log_print_line_prefix(STDTYPE_OUT);
-	log_stdout_printf("%s\nversion %s, %s %d bits\n", program_desc, VERSION, OS_NAME, sizeof(void*)*8);
-	_log_header_printed = 1;
+	log_prefix = 1;
+	log_info("%s\nversion %s, %s %d bits\n", program_desc, VERSION, OS_NAME, sizeof(void*)*8);
 }
 
-void log_stdout_print_and_exit(int result) {
+void log_help(int argc, char *argv[], char *program_desc, char *help) {
+	if (argc!=1 && strcmp(argv[1],"-h") && strcmp(argv[1],"-help") && strcmp(argv[1],"--help") && strcmp(argv[1],"help")) return;
+	printf("%s\nversion %s, %s %d bits\n\n%s", program_desc, VERSION, OS_NAME, sizeof(void*)*8, help);
+	exit(0);
+}
+
+void log_exit_fatal() {
 	thread_mutex_lock(&log_mutex);
-	_log_print_str(STDTYPE_OUT, "\n\n");
-	if (!_log_header_printed) {
-		_log_print_str(STDTYPE_OUT, result==0 ? "completed successfully" : result==1 ? "completed with errors" : "not completed due to errors");
-		_log_print_str(STDTYPE_OUT, "\n");
-	}
+	_log_println_str(LOG_LEVEL_FATAL, MSG_EXIT_FATAL);
+	usleep(1*1000);
 	if (log_file_name[0]==0)
-		fprintf(stdout, "\n\n");
-	exit(result);
+		fprintf(stderr, "\n");
+	exit(2);
 }
 
-void log_stderr_print(int error_code, ...) {
+void log_exit_stop() {
+	thread_mutex_lock(&log_mutex);
+	_log_println_str(LOG_LEVEL_INFO, MSG_EXIT_STOP);
+	if (log_file_name[0]==0)
+		fprintf(stdout, "\n");
+	exit(0);
+}
 
-	fflush(stdout);
+// result:
+//   1 - always
+int log_error(int error_code, ...) {
 
 	int errors_size = sizeof(ERRORS)/sizeof(ERRORS[0]);
 
 	if (error_code<0 || error_code>=errors_size)
 		error_code=errors_size-1;
-
-	thread_mutex_lock(&log_mutex);
 
 	log_error_count++;
 
@@ -305,11 +243,33 @@ void log_stderr_print(int error_code, ...) {
 	vsnprintf(error_text+prefix_len, sizeof(error_text)-prefix_len, ERRORS[error_code], args);
     va_end(args);
 
-    _log_print_str(STDTYPE_ERR, "\n");
-    _log_print_str(STDTYPE_ERR, error_text);
+	thread_mutex_lock(&log_mutex);
+	usleep(1*1000);
 
+	_log_println_str(LOG_LEVEL_ERROR, error_text);
+
+	usleep(1*1000);
     thread_mutex_unlock(&log_mutex);
 
    	thread_set_last_erorr(error_code, error_text);
 
+   	return 1;
+}
+
+void log_set_file(char *value) {
+	if (!freopen(value, "a", stdout)) {
+		log_info("");
+		log_error(25, errno, value, "stdout");
+		exit(2);
+	}
+	fseek(stdout, 0, SEEK_END);
+	if (ftello(stdout)!=0) {
+		fprintf(stdout, "\n");
+	}
+	if (!freopen(value, "a", stderr)) {
+		log_info(ERRORS[25], errno, value, "stderr");
+		exit(2);
+	}
+	if (str_copy(log_file_name, sizeof(log_file_name), value))
+		exit(2);
 }

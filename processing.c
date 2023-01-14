@@ -11,22 +11,17 @@ char file_list_updates_name[STR_SIZE];
 int file_list_updates_open(char *value) {
 	if (str_copy(file_list_updates_name, sizeof(file_list_updates_name), value)) return 1;
 	file_list_updates = fopen(file_list_updates_name,"wb");
-	if(!file_list_updates) {
-		log_stderr_print(8, file_list_updates_name);
-	    return 1;
-	}
+	if(!file_list_updates)
+		return log_error(8, file_list_updates_name);
 	return 0;
 }
 
 int file_list_updates_close() {
-    if (file_list_updates && fclose(file_list_updates)) {
-		log_stderr_print(14, file_list_updates_name);
-		return 1;
-	}
+    if (file_list_updates && fclose(file_list_updates))
+    	return log_error(14, file_list_updates_name);
     file_list_updates = NULL;
 	return 0;
 }
-
 
 int process_include(stream *file, char *directory_root, char *directory) {
 	int pos_begin, pos_path, pos_end;
@@ -34,15 +29,11 @@ int process_include(stream *file, char *directory_root, char *directory) {
 		pos_begin = str_find(file->data, file->len, 0, TAG_PGHTML_INCLUDE_BEGIN, 0);
 		if (pos_begin==-1) break;
 		pos_path = str_find_char_html(file->data, file->len, pos_begin, '>');
-		if (pos_path==-1) {
-			log_stderr_print(16, ">", pos_path);
-			return 1;
-		}
+		if (pos_path==-1)
+			return log_error(16, ">", pos_path);
 		pos_end = str_find(file->data, file->len, pos_path, TAG_PGHTML_INCLUDE_END, 0);
-		if (pos_end==-1) {
-			log_stderr_print(16, TAG_PGHTML_INCLUDE_END, pos_path);
-			return 1;
-		}
+		if (pos_end==-1)
+			return log_error(16, TAG_PGHTML_INCLUDE_END, pos_path);
 		char tag[STR_SIZE];
 		if (str_substr(tag, sizeof(tag), file->data, pos_begin, pos_path))
 			return 1;
@@ -98,9 +89,8 @@ int process_vars(stream *file, str_map *vars) {
 			return 1;
 		pos_end = str_find(file->data, file->len, pos_begin, "}", 0);
 		if (pos_end==-1) {
-			log_stderr_print(17, pos_begin);
 			stream_free(&file_new);
-			return 1;
+			return log_error(17, pos_begin);
 		}
 		pos_end++;
 		char var_name[STR_SIZE];
@@ -144,9 +134,8 @@ int process_pg_sql(stream *file) {
 			return 1;
 		pos_end = str_find(file->data, file->len, pos_begin, TAG_PGHTML_SQL_END, 0);
 		if (pos_end==-1) {
-			log_stderr_print(18, TAG_PGHTML_SQL_END, pos_begin);
 			stream_free(&file_new);
-			return 1;
+			return log_error(18, TAG_PGHTML_SQL_END, pos_begin);
 		}
 		pos_begin += strlen(TAG_PGHTML_SQL_BEGIN);
 		char query[STR_SIZE];
@@ -154,10 +143,7 @@ int process_pg_sql(stream *file) {
 			return 1;
 		pos_end += strlen(TAG_PGHTML_SQL_END);
 		PGresult *pg_result = PQexec(pg_conn, query);
-	    if(PQresultStatus(pg_result) != PGRES_TUPLES_OK) {
-	    	log_stderr_print(19, query, PQerrorMessage(pg_conn));
-        	return 1;
-        }
+		if (pg_check_result(pg_result, query, 1)) return 1;
 		int row_count = PQntuples(pg_result);
 		int column_count = PQnfields(pg_result);
         for(int i=0; i<row_count; i++) {
@@ -178,12 +164,9 @@ int process_pg_sql(stream *file) {
 }
 
 int process_file(char *directory_root, char *directory, char *filename, char *extension_source) {
+	log_info("processing file %s%s", directory, filename);
 	char filepath_source[STR_SIZE] = "";
 	if (str_add(filepath_source, sizeof(filepath_source), directory_root, directory, filename, NULL)) return 1;
-	char s_out[STR_SIZE] = "";
-	if (str_add(s_out, sizeof(s_out), directory, filename, "...", NULL)) return 1;
-	if (str_rtrim(s_out, sizeof(s_out), 60)) return 1;
-	log_stdout_println("  file %s", s_out);
 	char extension_dest[STR_SIZE];
 	if (str_substr(extension_dest, sizeof(extension_dest), extension_source, 2, strlen(extension_source)-1)) return 1;
 	char filepath_dest[STR_SIZE];
@@ -212,7 +195,7 @@ int process_file(char *directory_root, char *directory, char *filename, char *ex
 		stream_free(&file);
 		return 1;
 	}
-	log_stdout_printf(" done, %s", compare==0 ? "no update required" : compare==-1 ? "created" : "updated");
+	log_info("  done, %s", compare==0 ? "no update required" : compare==-1 ? "file created" : "file updated");
 	if (compare) {
 		char filename_dest[STR_SIZE];
 		if (str_substr(filename_dest, sizeof(filename_dest), filename, 0, strlen(filename)-strlen(extension_source)-1) || str_add(filename_dest, sizeof(filename_dest), extension_dest, NULL)) {
@@ -220,10 +203,9 @@ int process_file(char *directory_root, char *directory, char *filename, char *ex
 			return 1;
 		}
 		if (file_list_updates && fprintf(file_list_updates, "%s%s\n", directory, filename_dest)<=0) {
-			log_stderr_print(12, file_list_updates_name);
 			fclose(file_list_updates);
 			file_list_updates = NULL;
-			return 1;
+			return log_error(12, file_list_updates_name);
 		}
 	}
 	stream_free(&file);
@@ -274,25 +256,20 @@ int process_directories() {
     		char c = directory_root[strlen(directory_root)-1];
     		if (c!='/' && c!='\\')
     			if (str_add(directory_root, sizeof(directory_root), FILE_SEPARATOR, NULL)) return 1;
-    		log_stdout_println("processing directory %s", directory_root);
+    		log_info("directory %s", directory_root);
     		int result_directory = process_directory(directory_root, "");
     		result = result || result_directory;
-    		log_stdout_println("directory processed %s", result_directory ? "with error(s)" : "successfully");
+    		log_info("directory processed %s", result_directory ? "with error(s)" : "successfully");
     	} else {
-    		log_stdout_println("processing file %s", directories.values[i]);
     		char filename[STR_SIZE];
     		char extension[STR_SIZE];
     		if (file_filename(filename, sizeof(filename), directories.values[i])) return 1;
     		if (file_extension(extension, sizeof(extension), directories.values[i])) return 1;
-    		if (strlen(extension)<3 || extension[0]!='p' || extension[1]!='g') {
-    			log_stderr_print(22, extension);
-    			return 1;
-    		}
+    		if (strlen(extension)<3 || extension[0]!='p' || extension[1]!='g')
+    			return log_error(22, extension);
     		if (str_substr(directory_root, sizeof(directory_root), directories.values[i], 0, strlen(directories.values[i])-1)) return 1;
     		if (directory_root[0]==0 && str_copy(directory_root, sizeof(directory_root), ".")) return 1;
-    		int result_file = process_file(directory_root, "", filename, extension);
-    		result = result || result_file;
-    		log_stdout_println("file processed %s", result_file ? "with error(s)" : "successfully");
+    		result = process_file(directory_root, "", filename, extension) || result;
     	}
     }
 	return result;

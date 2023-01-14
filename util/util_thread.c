@@ -31,10 +31,8 @@ int _thread_mutex_init_try(thread_mutex *mutex) {
 }
 
 int thread_mutex_init(thread_mutex *mutex) {
-	if (_thread_mutex_init_try(mutex)) {
-		log_stderr_print(36);
-		return 1;
-	}
+	if (_thread_mutex_init_try(mutex))
+		return log_error(36);
 	return 0;
 }
 
@@ -52,8 +50,8 @@ void thread_mutex_lock(thread_mutex *mutex) {
 	#else
 		if (pthread_mutex_lock(mutex)) {
 	#endif
-			log_stderr_print(37);
-			log_stdout_print_and_exit(2);
+			log_error(37);
+			log_exit_fatal();
 		}
 }
 
@@ -63,8 +61,8 @@ void thread_mutex_unlock(thread_mutex *mutex) {
 	#else
 		if (pthread_mutex_unlock(mutex)) {
 	#endif
-			log_stderr_print(38);
-			log_stdout_print_and_exit(2);
+			log_error(38);
+			log_exit_fatal();
 		}
 }
 
@@ -81,14 +79,12 @@ void _thread_initialize(char *error_prefix) {
 }
 
 int thread_create(void *function, char *name, tcp_socket socket_connection) {
-
 	int thread_index;
-
 	thread_mutex_lock(&threads_mutex);
 	while(1) {
 		for(thread_index=0; thread_index<THREADS_SIZE && threads[thread_index].used; thread_index++);
 		if (thread_index<THREADS_SIZE) break;
-		log_stdout_println("too many running threads, waiting");
+		log_info("too many running threads, waiting");
 		sleep(1);
 	};
 	threads[thread_index].used = 1;
@@ -106,43 +102,29 @@ int thread_create(void *function, char *name, tcp_socket socket_connection) {
 		if (pthread_create(&threads[thread_index].sys_id, NULL, function, thread_index) != 0) {
 	#endif
 			threads[thread_index].used = 0;
-			log_stderr_print(26, name);
-			return 1;
+			return log_error(26, name);
 		}
 	threads[thread_index].last_error_code = 0;
 	threads[thread_index].last_error_text[0] = 0;
 	return 0;
-
 }
 
 tcp_socket thread_get_socket_connection(void *thread_args) {
-
 	int thread_index = thread_args;
 	return threads[thread_index].socket_connection;
-
 }
-
 
 void thread_begin(void *thread_args) {
-
 	int thread_index = thread_args;
-
 	threads[thread_index].id = CURRENT_THREAD_ID;
-
-	log_stdout_println("thread \"%s\" started", threads[thread_index].name);
-
+	log_info("thread \"%s\" started", threads[thread_index].name);
 }
 
-
 void thread_end(void *thread_args) {
-
 	int thread_index = thread_args;
-
-	log_stdout_println("thread \"%s\" finished", threads[thread_index].name);
-
+	log_info("thread \"%s\" finished", threads[thread_index].name);
 	threads[thread_index].id = 0;
 	threads[thread_index].used = 0;
-
 }
 
 int thread_get_current(thread **thread_current) {
@@ -159,10 +141,8 @@ int thread_get_current(thread **thread_current) {
 int thread_set_last_erorr(int error_code, char *error_text) {
 	if (error_code==LOG_ERROR_NOT_FOUND_CURRENT_THREAD_CODE) return 1;
 	thread *thread_current;
-	if(thread_get_current(&thread_current)) {
-		log_stderr_print(LOG_ERROR_NOT_FOUND_CURRENT_THREAD_CODE);
-		return 1;
-	}
+	if(thread_get_current(&thread_current))
+		return log_error(LOG_ERROR_NOT_FOUND_CURRENT_THREAD_CODE);
 	thread_current->last_error_code = error_code;
 	if(str_copy(thread_current->last_error_text, LOG_ERROR_TEXT_SIZE, error_text)) return 1;
 	return 0;
@@ -171,7 +151,7 @@ int thread_set_last_erorr(int error_code, char *error_text) {
 int thread_get_last_error(int *error_code, char *error_text, int error_text_size) {
 	thread *thread_current;
 	if(thread_get_current(&thread_current)) {
-		log_stderr_print(*error_code = LOG_ERROR_NOT_FOUND_CURRENT_THREAD_CODE);
+		log_error(*error_code = LOG_ERROR_NOT_FOUND_CURRENT_THREAD_CODE);
 		if(str_copy(error_text, error_text_size, LOG_ERROR_NOT_FOUND_CURRENT_THREAD_TEXT)) return 1;
 		return 1;
 	}

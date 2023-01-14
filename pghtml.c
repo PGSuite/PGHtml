@@ -32,7 +32,6 @@ char HELP[] =
 	"Logging options:\n" \
 	"  -l  FILE           log file, when specified, the prefix is set to \"ts\"\n" \
 	"  -lu FILE           output file for only created and updated destination files\n" \
-	"  -lp PREFIX         n - none (default), t - timestamp, ts - \"timestamp stdout|stderr\"\n" \
 	"\n" \
 	"Info:\n" \
 	"  -h, --help         print this help\n"
@@ -47,16 +46,11 @@ char HELP[] =
 int main(int argc, char *argv[])
 {
 
+	log_help(argc, argv, PROGRAM_DESC, HELP);
+
 	utils_initialize("PGHTML-");
 
-	if (argc==1 || strcmp(argv[1],"-h")==0 || strcmp(argv[1],"-help")==0 || strcmp(argv[1],"--help")==0 || strcmp(argv[1],"help")==0) {
-		log_stdout_print_header(PROGRAM_DESC);
-		log_stdout_printf(HELP);
-		exit(0);
-	}
-
 	char *log_file   = NULL;
-	char *log_prefix = NULL;
 
 	char *db_host             = "";
 	char *db_port             = NULL;
@@ -74,12 +68,12 @@ int main(int argc, char *argv[])
 	for(int i=1; i<argc; i++) {
 		if (argv[i][0]!='-') {
 			if (str_list_add(&directories, argv[i]))
-				log_stdout_print_and_exit(2);
+				exit(3);
 			continue;
 		}
 		if (i==argc-1) {
-			log_stderr_print(2, argv[i]);
-			log_stdout_print_and_exit(2);
+			log_error(2, argv[i]);
+			exit(3);
 		}
 		if (strcmp(argv[i],"-h")==0)   	  db_host=argv[++i];
 		else if (strcmp(argv[i],"-p")==0) db_port=argv[++i];
@@ -89,65 +83,59 @@ int main(int argc, char *argv[])
 		else if (strcmp(argv[i],"-e")==0) extentions=argv[++i];
 		else if (strcmp(argv[i],"-u")==0) {
 			if (str_copy(db_uri, sizeof(db_uri), argv[++i]))
-				log_stdout_print_and_exit(2);
+				exit(3);
 		}
 		else if (strlen(argv[i])>3 && argv[i][1]=='G' && argv[i][2]=='_') {
 		    char g_var_name[STR_SIZE];
 		    if (str_substr(g_var_name, sizeof(g_var_name), argv[i], 1, strlen(argv[i])))
-				log_stdout_print_and_exit(2);
+		    	exit(3);
 			if (str_map_put(&g_vars, g_var_name, argv[++i]))
-				log_stdout_print_and_exit(2);
+				exit(3);
 		}
 		else if (strcmp(argv[i],"-l")==0) log_file = argv[++i];
-		else if (strcmp(argv[i],"-lp")==0) log_prefix = argv[++i];
 		else if (strcmp(argv[i],"-lu")==0) {
 			if (file_list_updates_open(argv[++i])) return 1;
 		} else {
-			log_stderr_print(3, argv[i]);
-			log_stdout_print_and_exit(2);
+			log_error(3, argv[i]);
+			exit(3);
 		}
 	}
-
 	if (directories.len==0) {
-		log_stderr_print(4);
-		log_stdout_print_and_exit(2);
+		log_error(4);
+		exit(3);
 	}
-
     if ( strlen(db_uri)==0 && pg_uri_build(db_uri, sizeof(db_uri), db_host, db_port, db_name, db_user, db_password) )
-		log_stdout_print_and_exit(2);
-
+    	exit(3);
     if (extentions==NULL) extentions = FILE_EXTENTIONS_DEFAULT;
     if (str_list_split(&file_extensions, extentions, 0, -1, FILE_EXTENTIONS_SEPARATOR[0])) return 1;
     for(int i=0; i<file_extensions.len; i++)
     	if (strlen(file_extensions.values[i])<3 || file_extensions.values[i][0]!='p' || file_extensions.values[i][1]!='g') {
-    		log_stderr_print(22, file_extensions.values[i]);
-    		return 1;
+    		log_error(22, file_extensions.values[i]);
+    		exit(3);
     	}
 
 	log_stdout_print_header(PROGRAM_DESC);
 
-    if (str_list_print(&directories,     PATH_SEPARATOR[0],            "\ndirectories:       ") ||
-    	str_list_print(&file_extensions, FILE_EXTENTIONS_SEPARATOR[0], "\nfile extensions:   ")) {
-		log_stdout_print_and_exit(2);
+    if (str_list_println(&directories,     PATH_SEPARATOR[0],            "directories:       ") ||
+        str_list_println(&file_extensions, FILE_EXTENTIONS_SEPARATOR[0], "file extensions:   ") ||
+    	str_map_println (&g_vars,          ',',                          "global variables:  ")) {
+		log_exit_fatal();
     }
 
-    log_stdout_println("global variables:  ");
-    for(int i=0; i<g_vars.len; i++)
-    	log_stdout_printf("%s%s", i==0 ? "" : ",", g_vars.keys[i]);
-
-    log_stdout_println("libpq version:     %d", PQlibVersion());
-    log_stdout_println("");
+    log_info("libpq version:     %d", PQlibVersion());
+    log_info("");
 
 	if (pg_connect(&pg_conn, db_uri))
-		log_stdout_print_and_exit(2);
+		log_exit_fatal();
 
 	int result = process_directories();
 
-	pg_disconnect(pg_conn);
+	pg_disconnect(&pg_conn);
 
-	if (file_list_updates_close())
-		log_stdout_print_and_exit(2);
+	file_list_updates_close();
 
-	log_stdout_print_and_exit(result);
+    log_info("\n%s", result==0 ? "completed successfully" : "completed with errors");
+
+	exit(result!=0);
 
 }

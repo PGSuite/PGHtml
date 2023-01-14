@@ -8,10 +8,8 @@
 
 int file_read(char *path, stream *stream) {
     FILE *file = fopen(path,"rb");
-	if(file==NULL) {
-		log_stderr_print(8, path);
-		return 1;
-	}
+	if(file==NULL)
+		return log_error(8, path);
 	if (stream_init(stream)) {
 		fclose(file);
 		return 1;
@@ -20,10 +18,9 @@ int file_read(char *path, stream *stream) {
 		char buffer[10*1024];
 		int size = fread(buffer, 1, sizeof(buffer), file);
 		if(ferror(file)) {
-			log_stderr_print(10, path);
 			stream_free(stream);
 			fclose(file);
-			return 1;
+			return log_error(10, path);
 		}
 		if (stream_add_substr(stream, buffer, 0, size-1)) {
 			fclose(file);
@@ -31,9 +28,8 @@ int file_read(char *path, stream *stream) {
 		}
 	}
     if (fclose(file)) {
-		log_stderr_print(14, path);
-		stream_free(stream);
-		return 1;
+    	stream_free(stream);
+    	return log_error(14, path);
 	}
     return 0;
 }
@@ -60,28 +56,21 @@ int file_compare(char *path, stream *file_new) {
     return result;
 }
 
-
 int file_write(char *path, stream *stream) {
     FILE * file = fopen(path,"wb");
-	if(file==NULL) {
-		log_stderr_print(8, path);
-	    return 1;
-	}
+	if(file==NULL)
+		return log_error(8, path);
 	int size = fwrite(stream->data, 1, stream->len, file);
 	if(ferror(file)) {
-		log_stderr_print(12, path);
 		fclose(file);
-		return 1;
+		return log_error(12, path);
 	}
 	if(size!=stream->len) {
-		log_stderr_print(13, path);
 		fclose(file);
-		return 1;
+		return log_error(13, path);
 	}
-    if (fclose(file)) {
-		log_stderr_print(14, path);
-		return 1;
-	}
+    if (fclose(file))
+    	return log_error(14, path);
     return 0;
 }
 
@@ -92,8 +81,7 @@ int file_is_dir(char *path, int *is_dir) {
 			*is_dir = -1;
 			return 0;
 		}
-		log_stderr_print(50, path, errno);
-		return 1;
+		return log_error(50, path, errno);
 	}
 	*is_dir = S_ISDIR(path_stat.st_mode);
 	return 0;
@@ -137,10 +125,8 @@ int file_make_dirs(char *path, int is_file) {
 		#else
 			int res = mkdir(dir, 0755);
 		#endif
-		if (res!=0) {
-			log_stderr_print(49, dir, errno);
-			return 1;
-		}
+		if (res!=0)
+			return log_error(49, dir, errno);
 	}
 	return 0;
 }

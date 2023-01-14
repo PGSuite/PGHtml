@@ -43,10 +43,8 @@ int _json_entry_add(json *json, json_entry entry) {
 		int entries_new_size = json->entries_size*2;
 		int size_bytes = entries_new_size*sizeof(json_entry);
 		json_entry *entries_new = malloc(size_bytes);
-		if (entries_new==NULL) {
-			log_stderr_print(9, size_bytes);
-			return 1;
-		}
+		if (entries_new==NULL)
+			return log_error(9, size_bytes);
 		for(int i=0; i<json->entries_len; i++) {
 			entries_new[i] = json->entries[i];
 		}
@@ -76,10 +74,8 @@ int _json_parse_array(json *json, int *pos, int parent) {
 		if(_json_entry_add(json, json_entry)) return 1;
 		if(_json_skip_spaces(json, pos)) return 1;
 	} while(json->source[*pos]==',');
-	if (json->source[*pos]!=']') {
-		log_stderr_print(55, "Not found array end (char ']')", pos_begin, json->source);
-		return 1;
-	}
+	if (json->source[*pos]!=']')
+		return log_error(55, "Not found array end (char ']')", pos_begin, json->source);
 	if (str_utf8_next(json->source, pos)) return 1;
 	return 0;
 }
@@ -88,10 +84,8 @@ int _json_parse_array(json *json, int *pos, int parent) {
 int _json_parse_object(json *json, int *pos, int parent) {
 	int pos_begin=*pos;
 	if(_json_skip_spaces(json, pos)) return 1;
-	if (json->source[*pos]!='{') {
-		log_stderr_print(55, "Not found object start (char '{')", pos_begin, json->source);
-		return 1;
-	}
+	if (json->source[*pos]!='{')
+		return log_error(55, "Not found object start (char '{')", pos_begin, json->source);
 	do {
 		if (str_utf8_next(json->source, pos)) return 1;
 		json_entry json_entry;
@@ -102,10 +96,8 @@ int _json_parse_object(json *json, int *pos, int parent) {
 		if(_json_parse_value(json, pos)) return 1;
 		json_entry.key_end = *pos-1;
 		if(_json_skip_spaces(json, pos)) return 1;
-		if (json->source[*pos]!=':') {
-			log_stderr_print(55, "Not found name end (char ':')", pos_begin, json->source);
-			return 1;
-		}
+		if (json->source[*pos]!=':')
+			return log_error(55, "Not found name end (char ':')", pos_begin, json->source);
 		if (str_utf8_next(json->source, pos)) return 1;
 		if(_json_skip_spaces(json, pos)) return 1;
 		if (json->source[*pos]=='{') {
@@ -126,10 +118,8 @@ int _json_parse_object(json *json, int *pos, int parent) {
 		}
 		if(_json_skip_spaces(json, pos)) return 1;
 	} while(json->source[*pos]==',');
-	if (json->source[*pos]!='}') {
-		log_stderr_print(55, "Not found object end (char '}')", pos_begin, json->source);
-		return 1;
-	}
+	if (json->source[*pos]!='}')
+		return log_error(55, "Not found object end (char '}')", pos_begin, json->source);
 	if (str_utf8_next(json->source, pos)) return 1;
 	return 0;
 }
@@ -141,19 +131,15 @@ int json_init(json *json, char *source) {
 	json->entries_size = 10;
 	int size_bytes = json->entries_size*sizeof(json_entry);
 	json->entries = malloc(size_bytes);
-	if (json->entries==NULL) {
-		log_stderr_print(9, size_bytes);
-		return 1;
-	}
+	if (json->entries==NULL)
+		return log_error(9, size_bytes);
 	int pos = 0 ;
 	return _json_parse_object(json, &pos, -1);
 }
 
 int json_free(json *json) {
-	if (json->entries==NULL) {
-		log_stderr_print(56);
-		return 1;
-	}
+	if (json->entries==NULL)
+		return log_error(56);
 	free(json->entries);
 	json->entries = NULL;
 	json->entries_len = json->entries_size = -1;
@@ -190,8 +176,7 @@ int _json_find_entry(json_entry **entry, json *json, int error_on_not_found, enu
 			if (str_add(path, sizeof(path), ".", key_next, NULL)) return 1;
 			key_next=va_arg(args, char *);
 		}
-		log_stderr_print(57, value_type, path, json->source);
-		return 1;
+		return log_error(57, value_type, path, json->source);
 	}
 	return -1;
 }
@@ -242,30 +227,22 @@ int json_get_array_entry(json_entry **entry_array, json *json, int error_on_not_
 }
 
 int json_get_array_stream(char *stream, json *json, json_entry *entry_array, int index) {
-	if (index<0 || index>=entry_array->array_size) {
-		log_stderr_print(63, entry_array->array_size, index);
-		return 1;
-	}
+	if (index<0 || index>=entry_array->array_size)
+		return log_error(63, entry_array->array_size, index);
 	json_entry *entry_element = entry_array+1+index;
-	if (entry_element->value_type!=STRING) {
-		log_stderr_print(64, entry_element->value_type);
-		return 1;
-	}
+	if (entry_element->value_type!=STRING)
+		return log_error(64, entry_element->value_type);
 	if(stream_clear(stream)) return 1;
 	if(stream_add_substr_unescaped(stream, json->source, entry_element->value_begin, entry_element->value_end)) return 1;
 	return 0;
 }
 
 int json_get_array_str(char *str, int str_size, json *json, json_entry *entry_array, int index) {
-	if (index<0 || index>=entry_array->array_size) {
-		log_stderr_print(63, entry_array->array_size, index);
-		return 1;
-	}
+	if (index<0 || index>=entry_array->array_size)
+		return log_error(63, entry_array->array_size, index);
 	json_entry *entry_element = entry_array+1+index;
-	if (entry_element->value_type!=STRING) {
-		log_stderr_print(64, entry_element->value_type);
-		return 1;
-	}
+	if (entry_element->value_type!=STRING)
+		return log_error(64, entry_element->value_type);
 	if(str_substr(str, str_size, json->source, entry_element->value_begin, entry_element->value_end)) return 1;
 	if(str_unescaped(str)) return 1;
 	return 0;

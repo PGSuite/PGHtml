@@ -8,10 +8,8 @@
 
 int stream_init(stream *stream) {
 	stream->data = malloc(STREAM_SIZE_INIT);
-	if (stream->data==NULL) {
-		log_stderr_print(9, STREAM_SIZE_INIT);
-		return 1;
-	}
+	if (stream->data==NULL)
+		return log_error(9, STREAM_SIZE_INIT);
 	stream->size = STREAM_SIZE_INIT-1;
 	stream->data[0] = 0;
 	stream->len = 0;
@@ -19,10 +17,8 @@ int stream_init(stream *stream) {
 }
 
 int stream_free(stream *stream) {
-	if (stream->data==NULL) {
-		log_stderr_print(51);
-		return 1;
-	}
+	if (stream->data==NULL)
+		return log_error(51);
 	free(stream->data);
 	stream->data = NULL;
 	stream->size = -1;
@@ -46,17 +42,13 @@ int stream_replace(stream *stream_dest, stream *stream_source) {
 }
 
 int _stream_resize(stream *stream, int size_need) {
-	if (stream->data == NULL) {
-		log_stderr_print(51);
-		return 1;
-	}
+	if (stream->data==NULL)
+		return log_error(51);
 	if (stream->len+size_need > stream->size) {
 		int size_alloc = stream->len + size_need + STREAM_SIZE_STEP;
 		char *data_new = malloc(size_alloc);
-		if (data_new==NULL) {
-			log_stderr_print(9, size_alloc);
-			return 1;
-		}
+		if (data_new==NULL)
+			return log_error(9, size_alloc);
 		for (int i=0; i <= stream->len; i++)
 			data_new[i] = stream->data[i];
 		free(stream->data);
