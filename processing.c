@@ -23,143 +23,267 @@ int file_list_updates_close() {
 	return 0;
 }
 
+int tag_skip_spaces(char *html, int *pos) {
+	int p = *pos;
+	for(; html[p] && html[p]!='>' && (html[p]==' ' || html[p]=='\t'); p++);
+	if (!html[p]) return log_error(17, '>', *pos);
+	*pos = p;
+	return 0;
+}
+
+int tag_skip_chars(char *html, int *pos, char stop_char) {
+	int p = *pos;
+	for(; html[p] && html[p]!='>' && html[p]!=' ' && html[p]!='\t' && html[p]!=stop_char; p++);
+	if (!html[p]) return log_error(17, '>', *pos);
+	if (stop_char!=0 && html[p]=='>')	return log_error(17, '>', *pos);
+	*pos = p;
+	return 0;
+}
+
+int parse_html_element(char *html, int pos_begin, int *pos_end, char *tag, int tag_size, str_map *attributes, stream *body) {
+	int pos=pos_begin;
+	if (tag_skip_chars(html, &pos, 0)) return 1;
+	if (str_substr(tag, tag_size, html, pos_begin+1, pos-1)) return 1;
+	str_map_clear(attributes);
+	while(1) {
+		if(tag_skip_spaces(html, &pos)) return 1;
+		if (html[pos]=='>') break;
+		int name_begin = pos;
+		if (tag_skip_chars(html, &pos, '=')) return 1;
+		int name_end = pos-1;
+		if (html[pos]!='=') {
+			if (tag_skip_spaces(html, &pos)) return 1;
+			if (html[pos]!='=') return log_error(7, name_end);
+		}
+		pos++;
+		char name[STR_SIZE];
+		if (str_substr(name, sizeof(name), html, name_begin, name_end)) return 1;
+		if (tag_skip_spaces(html, &pos)) return 1;
+		if (html[pos]=='>')	return log_error(7, name_end);
+		int value_begin = pos;
+		if (html[value_begin]!='"' && html[value_begin]!='\'') return log_error(7, value_begin);
+		for(pos++; html[pos] && html[pos]!=html[value_begin];pos++);
+		if (!html[pos]) return log_error(7, value_begin);
+		int value_end = pos++;
+		if ( (value_begin==value_end) || (html[value_end]!='"'  && html[value_end]!='\'') ) return log_error(7, value_begin);
+		char value[STR_SIZE] = "";
+		if (value_begin+1<value_end && str_substr(value, sizeof(value), html, value_begin+1, value_end-1)) return 1;
+		str_map_put(attributes, name, value);
+	}
+	int body_begin = ++pos;
+	char tag_end_name[STR_SIZE] = "";
+	if (str_add(tag_end_name, sizeof(tag_end_name), "</", tag, ">", NULL)) return 1;
+	int tag_end_pos = str_find(html, pos, tag_end_name, 0);
+	if (tag_end_pos==-1) return log_error(18, tag_end_name, pos);
+	stream_clear(body);
+	if (stream_add_substr(body, html, body_begin, tag_end_pos-1)) return 1;
+	*pos_end = tag_end_pos+strlen(tag_end_name)-1;
+	return 0;
+}
+
+int process_var_replace(stream *file_dest, stream *file_source, int *pos, stream_list *vars) {
+	int pos_end = str_find(file_source->data, *pos, "}", 0);
+	if (pos_end==-1) return log_error(17, '}', *pos);
+	int var_len = pos_end-*pos-2;
+	int var_index;
+	for(var_index=0; var_index<vars->len; var_index++) {
+		if (strlen(vars->names[var_index])!=var_len) continue;
+		if (strncmp(vars->names[var_index], file_source->data+*pos+2, var_len)) continue;
+		break;
+	}
+	int res;
+	if (var_index<vars->len) {
+		if (stream_add_str(file_dest, vars->streams[var_index].data, NULL)) return 1;
+		res = 0;
+	} else {
+		if (stream_add_substr(file_dest, file_source->data, *pos, pos_end)) return 1;
+		res = -1;
+	}
+	*pos = pos_end;
+	return res;
+}
+
 int process_include(stream *file, char *directory_root, char *directory) {
 	int pos_begin, pos_path, pos_end;
 	do  {
-		pos_begin = str_find(file->data, file->len, 0, TAG_PGHTML_INCLUDE_BEGIN, 0);
+		char include_path[STR_SIZE];
+		if (str_copy(include_path, sizeof(include_path), directory_root)) return 1;
+		pos_begin = str_find(file->data, 0, "<" TAG_PGHTML_INCLUDE, 0);
 		if (pos_begin==-1) break;
-		pos_path = str_find_char_html(file->data, file->len, pos_begin, '>');
-		if (pos_path==-1)
-			return log_error(16, ">", pos_path);
-		pos_end = str_find(file->data, file->len, pos_path, TAG_PGHTML_INCLUDE_END, 0);
-		if (pos_end==-1)
-			return log_error(16, TAG_PGHTML_INCLUDE_END, pos_path);
 		char tag[STR_SIZE];
-		if (str_substr(tag, sizeof(tag), file->data, pos_begin, pos_path))
+		str_map attributes;
+		stream include_filename;
+		if (stream_init(&include_filename)) return 1;
+		if (parse_html_element(file->data, pos_begin, &pos_end, tag, sizeof(tag), &attributes, &include_filename)) {
+			stream_free(&include_filename);
 			return 1;
-		str_map vars;
-		if (str_tag_attributes(tag, &vars))
-			return 1;
-		char include_filename[STR_SIZE];
-		if (str_substr(include_filename, sizeof(include_filename), file->data, pos_path+1, pos_end-1))
-			return 1;
-		char include_path[STR_SIZE] = "";
-		if (str_add(include_path, sizeof(include_path), directory_root, NULL)) return 1;
-		if (include_filename[0]!='/') {
-			if (str_add(include_path, sizeof(include_path), directory, include_filename, NULL)) return 1;
-		} else {
-			if (str_add(include_path, sizeof(include_path), include_filename+1, NULL)) return 1;
 		}
-		int include_path_len = strlen(include_path);
-		for(int i=0; i<include_path_len; i++)
-			if (include_path[i]=='/' || include_path[i]=='\\') include_path[i]=FILE_SEPARATOR[0];
+		int res = include_filename.data[0]!='/' ? str_add(include_path, sizeof(include_path), directory, include_filename.data, NULL) : str_add(include_path, sizeof(include_path), include_filename.data+1, NULL);
+		stream_free(&include_filename);
+		if (res) return 1;
+		#ifdef _WIN32
+			str_replace_char(include_path, '/', FILE_SEPARATOR[0]);
+		#else
+			str_replace_char(include_path, '\\', FILE_SEPARATOR[0]);
+		#endif
 		stream include_body;
 		if (file_read(include_path, &include_body))
-			return 1;
-		if (process_vars(&include_body, &vars))
 			return 1;
 		stream file_new;
 		if (stream_init(&file_new))
 			return 1;
-		if (stream_add_substr(&file_new, file->data, 0, pos_begin-1) ||
-			stream_add_substr(&file_new, include_body.data, 0, include_body.len-1) ||
-			stream_add_substr(&file_new, file->data, pos_end+strlen(TAG_PGHTML_INCLUDE_END), file->len-1)) {
+		if (pos_begin>0 && stream_add_substr(&file_new, file->data, 0, pos_begin-1)) {
 			stream_free(&file_new);
 			return 1;
 		};
-		if (stream_replace(file, &file_new)) return 1;
+		stream_list vars;
+		stream_list_init(&vars);
+		for(int i=0; i<attributes.len; i++)
+			if (stream_list_add_str(&vars, attributes.keys[i], attributes.values[i])) {
+				stream_list_free(&vars);
+				stream_free(&file_new);
+				return 1;
+			}
+		res = 0;
+		for(int pos=0; pos<include_body.len; pos++) {
+			if (include_body.data[pos]=='$' && include_body.data[pos+1]=='{') {
+				if (process_var_replace(&file_new, &include_body, &pos, &vars)>0) { res=1; break; }
+				continue;
+			}
+			if (stream_add_char(&file_new, include_body.data[pos])) { res=1; break; }
+		}
+		stream_list_free(&vars);
+		if (res) {
+			stream_free(&file_new);
+			return 1;
+		};
+		if (pos_end<file->len-1 && stream_add_substr(&file_new, file->data, pos_end+1, file->len-1)) {
+			stream_free(&file_new);
+			return 1;
+		};
+		stream_replace(file, &file_new);
 	} while(1);
 	return 0;
 }
 
-int process_vars(stream *file, str_map *vars) {
-	stream file_new;
-	if (stream_init(&file_new))
-		return 1;
-	int pos_end=0;
-	while(1) {
-		int pos_begin = str_find(file->data, file->len, pos_end, "${", 0);
-		if (pos_begin==-1) {
-			if (stream_add_substr(&file_new, file->data, pos_end, file->len-1)) {
-				return 1;
-			}
-			break;
-		}
-		if(stream_add_substr(&file_new, file->data, pos_end, pos_begin-1))
+int process_vars(stream *file, stream_list *vars) {
+	int pos_begin=0, pos_end;
+	do  {
+		pos_begin = str_find(file->data, pos_begin, "<" TAG_PGHTML_VAR, 0);
+		if (pos_begin==-1) break;
+		char tag[STR_SIZE];
+		str_map attributes;
+		stream value;
+		if (stream_init(&value)) return 1;
+		if (parse_html_element(file->data, pos_begin, &pos_end, tag, sizeof(tag), &attributes, &value)) {
+			stream_free(&value);
 			return 1;
-		pos_end = str_find(file->data, file->len, pos_begin, "}", 0);
-		if (pos_end==-1) {
+		}
+		if (strcmp(tag, TAG_PGHTML_VAR)) {
+			stream_free(&value);
+			return log_error(83, tag);
+		}
+		int attribute_name_index = str_map_index(&attributes, "name");
+		if (attribute_name_index==-1) {
+			stream_free(&value);
+			return log_error(83, tag);
+		}
+		int res = stream_list_add_str(vars, attributes.values[attribute_name_index], value.data);
+		stream_free(&value);
+		if(res)
+			return 1;
+		stream file_new;
+		if (stream_init(&file_new))
+			return 1;
+		if (pos_begin>0 && stream_add_substr(&file_new, file->data, 0, pos_begin-1)) {
 			stream_free(&file_new);
-			return log_error(17, pos_begin);
+			return 1;
 		}
-		pos_end++;
-		char var_name[STR_SIZE];
-		if (str_substr(var_name, sizeof(var_name), file->data, pos_begin+2, pos_end-2)) {
+		if (file->data[pos_end+1]=='\r' && file->data[pos_end+2]=='\n')
+			pos_end = pos_end + 2;
+		else if (file->data[pos_end+1]=='\r')
+			pos_end = pos_end + 1;
+		if (pos_end<file->len-1 && stream_add_substr(&file_new, file->data, pos_end+1, file->len-1)) {
 			stream_free(&file_new);
 			return 1;
 		}
-		char *var_value = NULL;
-		for(int i=0; i<vars->len; i++) {
-			if (strcmp(var_name,vars->keys[i])==0)
-				var_value = vars->values[i];
-		}
-		if (var_value==NULL) {
-			char var_value_not_found[STR_SIZE] = "";
-			if (str_add(var_value_not_found, sizeof(var_value_not_found), "${", var_name, "}", NULL)) {
-				stream_free(&file_new);
-				return 1;
-			}
-			var_value = var_value_not_found;
-		}
-		if (stream_add_substr(&file_new, var_value, 0, strlen(var_value)-1))
+		stream_replace(file, &file_new);
+	} while(1);
+	pos_begin=0;
+	do  {
+		pos_begin = pos_end = str_find(file->data, pos_begin, "${", 0);
+		if (pos_begin==-1) break;
+		stream file_new;
+		if (stream_init(&file_new))
 			return 1;
-	}
-	if (stream_replace(file, &file_new)) return 1;
+		if (pos_begin>0 && stream_add_substr(&file_new, file->data, 0, pos_begin-1)) {
+			stream_free(&file_new);
+			return 1;
+		}
+		int res = process_var_replace(&file_new, file, &pos_end, vars);
+		if (res>0) {
+			stream_free(&file_new);
+			return 1;
+		}
+		if (res==-1) pos_begin++;
+		if (pos_end<file->len-1 && stream_add_substr(&file_new, file->data, pos_end+1, file->len-1)) {
+			stream_free(&file_new);
+			return 1;
+		};
+		stream_replace(file, &file_new);
+	} while(1);
 	return 0;
 }
 
-int process_pg_sql(stream *file) {
-	stream file_new;
-	if (stream_init(&file_new))
-		return 1;
-	int pos_end=0;
-	while(1) {
-		int pos_begin = str_find(file->data, file->len, pos_end, TAG_PGHTML_SQL_BEGIN, 0);
-		if (pos_begin==-1) {
-			if (stream_add_substr(&file_new, file->data, pos_end, file->len-1))
-				return 1;
-			break;
-		}
-		if(stream_add_substr(&file_new, file->data, pos_end, pos_begin-1))
+int process_sql(stream *file) {
+	int pos_begin, pos_end;
+	do  {
+		pos_begin = str_find(file->data, 0, "<" TAG_PGHTML_SQL ">", 0);
+		if (pos_begin==-1) break;
+		char tag[STR_SIZE];
+		str_map attributes;
+		stream sql_query;
+		if (stream_init(&sql_query)) return 1;
+		if (parse_html_element(file->data, pos_begin, &pos_end, tag, sizeof(tag), &attributes, &sql_query)) {
+			stream_free(&sql_query);
 			return 1;
-		pos_end = str_find(file->data, file->len, pos_begin, TAG_PGHTML_SQL_END, 0);
-		if (pos_end==-1) {
+		}
+		PGresult *pg_result;
+		if (pg_select(&pg_result, pg_conn, 1, sql_query.data, 0)) {
+			stream_free(&sql_query);
+			return 1;
+		}
+		stream file_new;
+		if (stream_init(&file_new))
+			return 1;
+		if (pos_begin>0 && stream_add_substr(&file_new, file->data, 0, pos_begin-1)) {
 			stream_free(&file_new);
-			return log_error(18, TAG_PGHTML_SQL_END, pos_begin);
-		}
-		pos_begin += strlen(TAG_PGHTML_SQL_BEGIN);
-		char query[STR_SIZE];
-		if (str_substr(query, sizeof(query), file->data, pos_begin, pos_end-1))
 			return 1;
-		pos_end += strlen(TAG_PGHTML_SQL_END);
-		PGresult *pg_result = PQexec(pg_conn, query);
-		if (pg_check_result(pg_result, query, 1)) return 1;
+		};
 		int row_count = PQntuples(pg_result);
 		int column_count = PQnfields(pg_result);
-        for(int i=0; i<row_count; i++) {
-        	if (i>0 && stream_add_str(&file_new, "\r\n", NULL))
-        		return 1;
-        	for(int j=0; j<column_count; j++) {
-            	if (j>0 && stream_add_substr(&file_new, " ", 0, 0))
-            		return 1;
-				char *value = PQgetvalue(pg_result, i, j);
-				if (stream_add_substr(&file_new, value, 0, strlen(value)-1))
-					return 1;
+		int res = 0;
+        for(int r=0; r<row_count; r++) {
+        	if (r>0 && stream_add_str(&file_new, "\r\n", NULL)) { res=1; break; }
+        	for(int c=0; c<column_count; c++) {
+            	if (c>0 && stream_add_str(&file_new, " ", NULL)) { res=1; break; }
+				char *value = PQgetisnull(pg_result, r, c) ? "<null>" : PQgetvalue(pg_result, r, c);
+				if (stream_add_str(&file_new, value, NULL)) { res=1; break; }
 	       	}
+        	if (res) break;
         }
         PQclear(pg_result);
-	}
-	if (stream_replace(file, &file_new)) return 1;
+		stream_free(&sql_query);
+		if (res) {
+			stream_free(&file_new);
+			return 1;
+		}
+		if (pos_end<file->len-1 && stream_add_substr(&file_new, file->data, pos_end+1, file->len-1)) {
+			stream_free(&file_new);
+			return 1;
+		};
+		stream_replace(file, &file_new);
+	} while(1);
 	return 0;
 }
 
@@ -172,31 +296,39 @@ int process_file(char *directory_root, char *directory, char *filename, char *ex
 	char filepath_dest[STR_SIZE];
 	if (str_substr(filepath_dest, sizeof(filepath_dest), filepath_source, 0, strlen(filepath_source)-strlen(extension_source)-1)) return 1;
 	if (str_add(filepath_dest, sizeof(filepath_dest), extension_dest, NULL)) return 1;
+	stream_list vars;
+	stream_list_init(&vars);
+	if (stream_list_add_str(&vars, "directory_root",  directory_root))  return 1;
+	if (stream_list_add_str(&vars, "directory",       directory))       return 1;
+	if (stream_list_add_str(&vars, "filename",        filename))        return 1;
+	if (stream_list_add_str(&vars, "filepath_source", filepath_source)) return 1;
+	if (stream_list_add_str(&vars, "filepath_dest",   filepath_dest))   return 1;
+	for(int i=0; i<g_vars.len; i++)
+		if (stream_list_add_str(&vars, g_vars.keys[i], g_vars.values[i])) return 1;
+	//
 	stream file;
 	if (file_read(filepath_source, &file))
 		return 1;
-	str_map vars; str_map_clear(&vars);
-	if (str_map_put(&vars, "directory_root",  directory_root))  return 1;
-	if (str_map_put(&vars, "directory",       directory))       return 1;
-	if (str_map_put(&vars, "filename",        filename))        return 1;
-	if (str_map_put(&vars, "filepath_source", filepath_source)) return 1;
-	if (str_map_put(&vars, "filepath_dest",   filepath_dest))   return 1;
-	//
-	if (process_include(&file, directory_root, directory) || process_vars(&file, &g_vars) || process_vars(&file, &vars) || process_pg_sql(&file)) {
+	if (process_include(&file, directory_root, directory)) {
+		stream_list_free(&vars);
 		stream_free(&file);
 		return 1;
 	}
-	int compare = file_compare(filepath_dest, &file);
-	if (compare>0) {
+	int res = process_vars(&file, &vars);
+	stream_list_free(&vars);
+	if (res) {
 		stream_free(&file);
 		return 1;
 	}
-	if (compare<0 && file_write(filepath_dest, &file)) {
+	if (process_sql(&file)) {
 		stream_free(&file);
 		return 1;
 	}
-	log_info("  done, %s", compare==0 ? "no update required" : compare==-1 ? "file created" : "file updated");
-	if (compare) {
+	int changed = file_write_if_changed(filepath_dest, &file);
+	stream_free(&file);
+	if (changed>0) return 1;
+	log_info("  done, %s", changed==-1 ? "file created" : changed==-2 ? "file updated" : "no update required");
+	if (changed!=-3) {
 		char filename_dest[STR_SIZE];
 		if (str_substr(filename_dest, sizeof(filename_dest), filename, 0, strlen(filename)-strlen(extension_source)-1) || str_add(filename_dest, sizeof(filename_dest), extension_dest, NULL)) {
 			stream_free(&file);
@@ -208,7 +340,6 @@ int process_file(char *directory_root, char *directory, char *filename, char *ex
 			return log_error(12, file_list_updates_name);
 		}
 	}
-	stream_free(&file);
 	return 0;
 }
 
@@ -221,18 +352,18 @@ int process_directory(char *directory_root, char *directory) {
     while ((dir_ent = readdir(dir)) != NULL) {
     	if (!strcmp(dir_ent->d_name, ".") || !strcmp(dir_ent->d_name, "..")) continue;
 		char path_ent[STR_SIZE] = "";
-		if (str_add(path_ent, sizeof(path_ent), directory_root, directory, dir_ent->d_name, NULL)) return 1;
+		if (str_add(path_ent, sizeof(path_ent), directory_root, directory, dir_ent->d_name, NULL))  { result = 1; break; }
 		int is_dir;
 		if (file_is_dir(path_ent, &is_dir)) return 1;
 		if (is_dir) {
 			char directory_ent[STR_SIZE] = "";
-			if (str_add(directory_ent, sizeof(path_ent), directory, dir_ent->d_name, FILE_SEPARATOR, NULL)) return 1;
+			if (str_add(directory_ent, sizeof(path_ent), directory, dir_ent->d_name, FILE_SEPARATOR, NULL)) { result = 1; break; }
 			if (process_directory(directory_root, directory_ent))
 				result = 1;
 			continue;
 		}
 		char extension[STR_SIZE];
-		if (file_extension(extension, sizeof(extension), dir_ent->d_name )) return 1;
+		if (file_extension(extension, sizeof(extension), dir_ent->d_name ))  { result = 1; break; }
 		if (extension[0]==0) continue;
 		int i;
 		for (i=0;i<file_extensions.len; i++)
@@ -261,15 +392,17 @@ int process_directories() {
     		result = result || result_directory;
     		log_info("directory processed %s", result_directory ? "with error(s)" : "successfully");
     	} else {
+    		char dir[STR_SIZE];
     		char filename[STR_SIZE];
     		char extension[STR_SIZE];
+    		if (file_dir(dir, sizeof(dir), directories.values[i])) return 1;
     		if (file_filename(filename, sizeof(filename), directories.values[i])) return 1;
     		if (file_extension(extension, sizeof(extension), directories.values[i])) return 1;
     		if (strlen(extension)<3 || extension[0]!='p' || extension[1]!='g')
     			return log_error(22, extension);
-    		if (str_substr(directory_root, sizeof(directory_root), directories.values[i], 0, strlen(directories.values[i])-1)) return 1;
-    		if (directory_root[0]==0 && str_copy(directory_root, sizeof(directory_root), ".")) return 1;
-    		result = process_file(directory_root, "", filename, extension) || result;
+    		if (dir[0]==0 && str_copy(dir, sizeof(dir), ".")) return 1;
+    		if (dir[0]!=FILE_SEPARATOR[0] && str_add(dir, sizeof(dir), FILE_SEPARATOR, NULL)) return 1;
+    		result = process_file(dir, "", filename, extension) || result;
     	}
     }
 	return result;

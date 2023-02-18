@@ -8,7 +8,7 @@ int tcp_startup() {
 		WSADATA wsa_data;
 		if (WSAStartup(MAKEWORD(2,2), &wsa_data))
 			return log_error(27, WSAGetLastError());
-		log_info("WSA started, status: \"%s\"", wsa_data.szSystemStatus);
+		// log_info("Windows Socket Architecture (WSA) started, status: \"%s\"", wsa_data.szSystemStatus);
 	#endif
 	return 0;
 }

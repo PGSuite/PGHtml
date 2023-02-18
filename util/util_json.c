@@ -212,7 +212,7 @@ int json_get_stream(stream *stream, json *json, int error_on_not_found, ...) {
 	int find = _json_find_entry(&entry, json, error_on_not_found, STRING, args);
 	va_end(args);
 	if (find) return find;
-	if(stream_clear(stream)) return 1;
+	stream_clear(stream);
 	if(stream_add_substr_unescaped(stream, json->source, entry->value_begin, entry->value_end)) return 1;
 	return 0;
 }
@@ -232,7 +232,7 @@ int json_get_array_stream(char *stream, json *json, json_entry *entry_array, int
 	json_entry *entry_element = entry_array+1+index;
 	if (entry_element->value_type!=STRING)
 		return log_error(64, entry_element->value_type);
-	if(stream_clear(stream)) return 1;
+	stream_clear(stream);
 	if(stream_add_substr_unescaped(stream, json->source, entry_element->value_begin, entry_element->value_end)) return 1;
 	return 0;
 }

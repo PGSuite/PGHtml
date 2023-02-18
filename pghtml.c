@@ -5,8 +5,6 @@
 #include "globals.h"
 #include "util/utils.h"
 
-#define PROGRAM_DESC "PGHtml is utility for creation an html files using data from PostgreSQL"
-
 char HELP[] =
 	"Usage:\n" \
 	"  pghtml DIRECTORIES [OPTIONS]\n" \
@@ -46,9 +44,9 @@ char HELP[] =
 int main(int argc, char *argv[])
 {
 
-	log_help(argc, argv, PROGRAM_DESC, HELP);
+	log_set_program_name("PGHtml is utility for creation an html files using data from PostgreSQL", "PGHTML");
 
-	utils_initialize("PGHTML-");
+	log_check_help(argc, argv, HELP);
 
 	char *log_file   = NULL;
 
@@ -114,16 +112,11 @@ int main(int argc, char *argv[])
     		exit(3);
     	}
 
-	log_stdout_print_header(PROGRAM_DESC);
+	utils_initialize();
 
-    if (str_list_println(&directories,     PATH_SEPARATOR[0],            "directories:       ") ||
-        str_list_println(&file_extensions, FILE_EXTENTIONS_SEPARATOR[0], "file extensions:   ") ||
-    	str_map_println (&g_vars,          ',',                          "global variables:  ")) {
-		log_exit_fatal();
-    }
-
-    log_info("libpq version:     %d", PQlibVersion());
-    log_info("");
+	char header[STR_SIZE];
+	if (log_get_header(header, sizeof(header)) || globals_add_parameters(header, sizeof(header))) exit(2);
+    log_info("%s", header);
 
 	if (pg_connect(&pg_conn, db_uri))
 		log_exit_fatal();

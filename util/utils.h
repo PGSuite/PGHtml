@@ -52,6 +52,13 @@ typedef struct
 	char *data;
 } stream;
 
+typedef struct
+{
+	int	 len;
+	char names[100][128];
+	stream streams[100];
+	char *data[100];
+} stream_list;
 
 // http --------------------------------------------------------------------------------------------
 
@@ -60,9 +67,10 @@ typedef struct
 #define HTTP_STATUS_NOT_FOUND      404
 #define HTTP_STATUS_INTERNAL_ERROR 500
 
-#define HTTP_CONTENT_TYPE_HTML "text/html"
-#define HTTP_CONTENT_TYPE_JS   "text/javascript"
-#define HTTP_CONTENT_TYPE_JSON "application/json"
+#define HTTP_CONTENT_TYPE_HTML        "text/html"
+#define HTTP_CONTENT_TYPE_TEXT_PLAIN  "text/plain"
+#define HTTP_CONTENT_TYPE_JS          "text/javascript"
+#define HTTP_CONTENT_TYPE_JSON        "application/json"
 
 typedef struct
 {
@@ -189,16 +197,5 @@ typedef struct
 	PGconn *conn;
 
 } pg_connection;
-
-typedef struct
-{
-
-	stream streams[PG_SQL_PARAMS_SIZE];
-	char *data[PG_SQL_PARAMS_SIZE];
-	int len;
-
-} pg_sql_params;
-
-
 
 #endif /* UTILS_H_ */

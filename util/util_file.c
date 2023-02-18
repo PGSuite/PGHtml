@@ -6,11 +6,11 @@
 
 #include "utils.h"
 
-int file_read(char *path, stream *stream) {
+int file_read(char *path, stream *file_body) {
     FILE *file = fopen(path,"rb");
 	if(file==NULL)
 		return log_error(8, path);
-	if (stream_init(stream)) {
+	if (stream_init(file_body)) {
 		fclose(file);
 		return 1;
 	}
@@ -18,60 +18,69 @@ int file_read(char *path, stream *stream) {
 		char buffer[10*1024];
 		int size = fread(buffer, 1, sizeof(buffer), file);
 		if(ferror(file)) {
-			stream_free(stream);
+			stream_free(file_body);
 			fclose(file);
 			return log_error(10, path);
 		}
-		if (stream_add_substr(stream, buffer, 0, size-1)) {
+		if (size>0 && stream_add_substr(file_body, buffer, 0, size-1)) {
 			fclose(file);
 			return 1;
 		}
 	}
     if (fclose(file)) {
-    	stream_free(stream);
+    	stream_free(file_body);
     	return log_error(14, path);
 	}
+    return 0;
+}
+
+int file_write(char *path, stream *file_body) {
+    FILE * file = fopen(path,"wb");
+	if(file==NULL)
+		return log_error(8, path);
+	int offset = 0;
+	while(offset<file_body->len) {
+		int len = fwrite((file_body->data)+offset, 1, file_body->len-offset, file);
+		if(ferror(file)) {
+			fclose(file);
+			return log_error(12, path);
+		}
+		if(len==0) {
+			fclose(file);
+			return log_error(13, path);
+		}
+		offset += len;
+	}
+    if (fclose(file))
+    	return log_error(14, path);
     return 0;
 }
 
 // result:
 //   >0 - error
-//    0 - equals
 //   -1 - new
-//   -2 - different
-int file_compare(char *path, stream *file_new) {
+//   -2 - changed
+//   -3 - equals
+int file_write_if_changed(char *path, stream *file_body) {
     struct stat file_stat;
     stat(path, &file_stat);
-    if (file_stat.st_dev==0) return -1;
-	stream file_old;
-	if (file_read(path, &file_old)) return 1;
-	int result = 0;
-	if (file_old.len!=file_new->len)
-		result = -2;
-	else {
-		for(int i=0; i<file_old.len; i++)
-			if (file_old.data[i]!=file_new->data[i]) { result = -2; break; }
-	}
-	stream_free(&file_old);
+    int result;
+    if (file_stat.st_dev==0)
+    	result = -1;
+    else {
+    	stream file_body_old;
+    	if (file_read(path, &file_body_old)) return 1;
+    	if (file_body_old.len!=file_body->len)
+    		result = -2;
+    	else {
+    		result = -3;
+    		for(int i=0; i<file_body_old.len; i++)
+    			if (file_body_old.data[i]!=file_body->data[i]) { result = -2; break; }
+    	}
+    	stream_free(&file_body_old);
+    }
+    if (result!=-3 && file_write(path, file_body)) return 1;
     return result;
-}
-
-int file_write(char *path, stream *stream) {
-    FILE * file = fopen(path,"wb");
-	if(file==NULL)
-		return log_error(8, path);
-	int size = fwrite(stream->data, 1, stream->len, file);
-	if(ferror(file)) {
-		fclose(file);
-		return log_error(12, path);
-	}
-	if(size!=stream->len) {
-		fclose(file);
-		return log_error(13, path);
-	}
-    if (fclose(file))
-    	return log_error(14, path);
-    return 0;
 }
 
 int file_is_dir(char *path, int *is_dir) {
@@ -87,6 +96,18 @@ int file_is_dir(char *path, int *is_dir) {
 	return 0;
 }
 
+int file_remove(char *filepath, int remove_empty_dir) {
+	if (remove(filepath))
+		if(errno!=2) return log_error(78, filepath, errno);
+	if (remove_empty_dir) {
+		char dir[STR_SIZE];
+		if (file_dir(dir, sizeof(dir), filepath))
+			return 1;
+		if (rmdir(dir))
+			if(errno!=41) return log_error(79, dir, errno);
+	}
+	return 0;
+}
 
 int file_extension(char *extension, int extension_size, char *filepath) {
 	int i = strlen(filepath);
@@ -104,8 +125,19 @@ int file_filename(char *filename, int filename_size, char *filepath) {
 	while (i>=0)
 		if (filepath[--i]==FILE_SEPARATOR[0]) break;
 	if (i<0)
-		return str_copy(filename, filename, filepath);
+		return str_copy(filename, filename_size, filepath);
 	return str_substr(filename, filename_size, filepath, i+1, strlen(filepath)-1);
+}
+
+int file_dir(char *dir, int dir_size, char *filepath) {
+	int i = strlen(filepath);
+	while (i>=0)
+		if (filepath[--i]==FILE_SEPARATOR[0]) break;
+	if (i<=0) {
+		dir[0] = 0;
+		return 0;
+	}
+	return str_substr(dir, dir_size, filepath, 0, i-1);
 }
 
 

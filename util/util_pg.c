@@ -14,8 +14,8 @@ pg_connection pg_connections[PG_CONNECTIONS_SIZE];
 thread_mutex  pg_connections_mutex;
 
 void _pg_initialize(char *error_prefix) {
-	if (_thread_mutex_init_try(&pg_connections_mutex))
-		_log_error_init_mutex("pg_connections_lock");
+	if (thread_mutex_init(&pg_connections_mutex, "pg_connections_mutex"))
+		log_exit_fatal();
 	for(int i=0; i<PG_CONNECTIONS_SIZE; i++)
 		pg_connections[i].assigned = 0;
 }
@@ -45,7 +45,7 @@ int pg_connection_assign(pg_connection **pg_connection, char *uri) {
 		pg_connection_free(&pg_connections[index]);
 		return 1;
 	}
-	if (thread_mutex_init(&pg_connections[index].mutex)) {
+	if (thread_mutex_init(&pg_connections[index].mutex, "pg_connection.mutex")) {
 		pg_connection_free(&pg_connections[index]);
 		return 1;
 	}
@@ -56,7 +56,7 @@ int pg_connection_assign(pg_connection **pg_connection, char *uri) {
 }
 
 int pg_connection_id_list(stream *list) {
-	if (stream_clear(list)) return 1;
+	stream_clear(list);
 	thread_mutex_lock(&pg_connections_mutex);
 	int res = 0;
 	for(int i=0; i<PG_CONNECTIONS_SIZE; i++) {
@@ -116,20 +116,23 @@ int pg_uri_build(char *uri, int uri_size, char *host, char *port, char *db_name,
 }
 
 int pg_uri_mask_password(char *uri_masked, int uri_masked_size, char *uri) {
-	int uri_len = strlen(uri);
-	int password_pos = str_find(uri, uri_len, 0, "password=", 1);
+	int password_pos = str_find(uri, 0, "password=", 1);
 	if (password_pos==-1)
 		return str_copy(uri_masked, uri_masked_size, uri);
 	if (str_substr(uri_masked, uri_masked_size, uri, 0, password_pos+8))
 		return 1;
 	if (str_add(uri_masked, uri_masked_size,"*","*","*", NULL)) return 1;
-	password_pos = str_find(uri, uri_len, password_pos, "&", 0);
+	password_pos = str_find(uri, password_pos, "&", 0);
 	if (password_pos!=-1) {
 		char s[STR_SIZE];
-		if (str_substr(s, sizeof(s), uri, password_pos, uri_len-1)) return 1;
+		if (str_substr(s, sizeof(s), uri, password_pos, strlen(uri)-1)) return 1;
 		if (str_add(uri_masked, uri_masked_size, s, NULL)) return 1;
 	}
 	return 0;
+}
+
+void _PQnoticeProcessorDisable(void *arg, const char *message) {
+    // log_info("SQL %s", message);
 }
 
 int pg_connect(PGconn **pg_conn, char *uri) {
@@ -138,13 +141,14 @@ int pg_connect(PGconn **pg_conn, char *uri) {
 		return 1;
 	log_info("connecting to database, URI: %s", uri_masked);
 	*pg_conn = PQconnectdb(uri);
-    if (PQstatus(*pg_conn) != CONNECTION_OK)
-    {
+    if (PQstatus(*pg_conn) != CONNECTION_OK)  {
     	log_error(62, PQerrorMessage(*pg_conn));
     	PQfinish(*pg_conn);
+    	*pg_conn = NULL;
     	return 1;
     }
     PQsetClientEncoding(*pg_conn, PG_CLIENT_ENCODING);
+    PQsetNoticeProcessor(*pg_conn, _PQnoticeProcessorDisable, NULL);
     log_info("connected, pid: %d, user: %s, client_encoding: %s, server version: %d", PQbackendPID(*pg_conn), PQuser(*pg_conn), pg_encoding_to_char(PQclientEncoding(*pg_conn)), PQserverVersion(*pg_conn));
     return 0;
 }
@@ -162,6 +166,10 @@ int pg_str_to_bool(char *value) {
     return value[0]=='t';
 }
 
+// return_data:
+//   !0 - return data (select)
+//    2 - not empty
+//    3 - one row
 int pg_check_result(PGresult *pg_result, const char *query, int return_data) {
 	int pg_result_status = PQresultStatus(pg_result);
 	if (pg_result_status==PGRES_FATAL_ERROR || pg_result_status==PGRES_BAD_RESPONSE) {
@@ -173,7 +181,7 @@ int pg_check_result(PGresult *pg_result, const char *query, int return_data) {
     	PQclear(pg_result);
     	return log_error(40, query);
     }
-	if (return_data==2 && PQntuples(pg_result)==0) {
+	if ( (return_data==2 || return_data==3) && PQntuples(pg_result)==0) {
 		PQclear(pg_result);
 		return log_error(66, query);
 	}
@@ -201,9 +209,9 @@ int pg_select_str(char *str, int str_size, PGconn *pg_conn, char *query, int par
 	int res = _pg_execute(pg_conn, &pg_result, 2, query, params_len, args);
 	va_end(args);
 	if (res) return 1;
-	res = str_copy(str, str_size, PQgetvalue(pg_result, 0, 0));
+	res = str_copy(str, str_size, !PQgetisnull(pg_result, 0, 0) ? PQgetvalue(pg_result, 0, 0) : "");
     PQclear(pg_result);
-    return res;
+    return 0;
 }
 
 int pg_select_str_dflt(char *str, int str_size, char *str_dflt, PGconn *pg_conn, char *query, int params_len, ...) {
@@ -213,11 +221,10 @@ int pg_select_str_dflt(char *str, int str_size, char *str_dflt, PGconn *pg_conn,
 	int res = _pg_execute(pg_conn, &pg_result, 1, query, params_len, args);
 	va_end(args);
 	if (res) return 1;
-	res = str_copy(str, str_size, PQntuples(pg_result)>0 ? PQgetvalue(pg_result, 0, 0) : str_dflt);
+	res = str_copy(str, str_size, PQntuples(pg_result)>0 && !PQgetisnull(pg_result, 0, 0) ? PQgetvalue(pg_result, 0, 0) : str_dflt);
     PQclear(pg_result);
-    return res;
+    return 0;
 }
-
 
 int pg_select_bool(int *value, PGconn *pg_conn, char *query, int params_len, ...) {
 	va_list args;
@@ -226,15 +233,15 @@ int pg_select_bool(int *value, PGconn *pg_conn, char *query, int params_len, ...
 	int res = _pg_execute(pg_conn, &pg_result, 2, query, params_len, args);
 	va_end(args);
 	if (res) return 1;
-	*value = pg_str_to_bool(PQgetvalue(pg_result, 0, 0));
+	*value = !PQgetisnull(pg_result, 0, 0) ? pg_str_to_bool(PQgetvalue(pg_result, 0, 0)) : 0;
     PQclear(pg_result);
-    return res;
+    return 0;
 }
 
-int pg_select(PGresult **pg_result, PGconn *pg_conn, char *query, int params_len, ...) {
+int pg_select(PGresult **pg_result, PGconn *pg_conn, int return_data, char *query, int params_len, ...) {
 	va_list args;
 	va_start(args, &params_len);
-	int res = _pg_execute(pg_conn, pg_result, 1, query, params_len, args);
+	int res = _pg_execute(pg_conn, pg_result, return_data, query, params_len, args);
 	va_end(args);
     return res;
 }
@@ -248,44 +255,4 @@ int pg_execute(PGconn *pg_conn, char *query, int params_len, ...) {
 	if (res) return 1;
     PQclear(pg_result);
     return res;
-}
-
-int pg_sql_params_init(pg_sql_params *sql_params, json *json, ...) {
-	sql_params->len = 0;
-	va_list args;
-	va_start(args, &json);
-    while(1)  {
-    	char *json_key = va_arg(args, char *);
-    	if (json_key==NULL) break;
-    	json_entry *json_entry;
-    	if (json_get_array_entry(&json_entry, json, 1, json_key, NULL)>0) {
-    		va_end(args);
-    		return 1;
-    	}
-    	if ((sql_params->len+json_entry->array_size)>PG_SQL_PARAMS_SIZE) {
-    		va_end(args);
-    		return log_error(65, sql_params->len+json_entry->array_size);
-    	}
-    	for(int i=0; i<json_entry->array_size; i++) {
-    		if (stream_init(&sql_params->streams[sql_params->len])) {
-    			va_end(args);
-    			pg_sql_params_free(sql_params);
-    			return 1;
-    		}
-    		sql_params->len++;
-    		if (json_get_array_stream(&sql_params->streams[sql_params->len-1], json, json_entry, i)) {
-    			va_end(args);
-    			pg_sql_params_free(sql_params);
-    			return 1;
-    		}
-    		sql_params->data[sql_params->len-1] = sql_params->streams[sql_params->len-1].data;
-    	}
-    }
-	va_end(args);
-	return 0;
-}
-
-void pg_sql_params_free(pg_sql_params *sql_params) {
-	for(int i=0; i<sql_params->len; i++)
-		stream_free(&sql_params->streams[i]);
 }

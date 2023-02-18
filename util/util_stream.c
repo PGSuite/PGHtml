@@ -16,29 +16,27 @@ int stream_init(stream *stream) {
 	return 0;
 }
 
-int stream_free(stream *stream) {
-	if (stream->data==NULL)
-		return log_error(51);
-	free(stream->data);
+void stream_free(stream *stream) {
+	if (stream->data==NULL)	log_error(51);
+	else free(stream->data);
 	stream->data = NULL;
 	stream->size = -1;
 	stream->len = -1;
-	return 0;
 }
 
-int stream_clear(stream *stream) {
+void stream_clear(stream *stream) {
 	stream->len = 0;
 	stream->data[0] = 0;
-	return 0;
 }
 
-
-int stream_replace(stream *stream_dest, stream *stream_source) {
-	if(stream_free(stream_dest)) return 1;
+void stream_replace(stream *stream_dest, stream *stream_source) {
+	stream_free(stream_dest);
 	stream_dest->data = stream_source->data;
 	stream_dest->len  = stream_source->len;
 	stream_dest->size = stream_source->size;
-	return 0;
+	stream_source->data = NULL;
+	stream_source->len  = -1;
+	stream_source->size = -1;
 }
 
 int _stream_resize(stream *stream, int size_need) {
@@ -59,6 +57,8 @@ int _stream_resize(stream *stream, int size_need) {
 }
 
 int stream_add_substr(stream *stream, char *source, int pos_begin, int pos_end) {
+	if(pos_begin<0 || pos_end<0 || pos_begin>pos_end)
+		return log_error(54, "stream_add_substr");
 	if (_stream_resize(stream, (pos_end - pos_begin) + 1)) return 1;
 	for (int i = pos_begin; i <= pos_end; i++)
 		stream->data[stream->len++] = source[i];
@@ -66,14 +66,15 @@ int stream_add_substr(stream *stream, char *source, int pos_begin, int pos_end) 
 	return 0;
 }
 
-
 int stream_add_str(stream *stream, ...) {
 	va_list args;
     va_start(args, &stream);
     while(1)  {
     	char *s = va_arg(args, char *);
     	if (s==NULL) break;
-    	if (stream_add_substr(stream, s, 0, strlen(s)-1)) {
+    	int len = strlen(s);
+    	if (len==0) continue;
+    	if (stream_add_substr(stream, s, 0, len-1)) {
     		va_end(args);
     		return 1;
     	}
@@ -138,5 +139,34 @@ int stream_add_rpad(stream *stream, char *prefix, char *str, int str_len_max, ch
 	for(int i=0; i<len; i++)
 		if (stream_add_char(stream, ' ')) return 1;
     return 0;
+}
+
+void stream_list_init(stream_list *stream_list) {
+	stream_list->len = 0;
+}
+
+int stream_list_add_str(stream_list *stream_list, char *name, char *str) {
+	int stream_list_size = sizeof(stream_list->names)/sizeof(stream_list->names[0]);
+	if (stream_list->len+1>=stream_list_size)
+		return log_error(16, stream_list_size);
+	if (str_copy(stream_list->names[stream_list->len], sizeof(stream_list->names[0]), name))
+		return 1;
+	if (stream_init(&stream_list->streams[stream_list->len]))
+		return 1;
+	if (stream_add_str(&stream_list->streams[stream_list->len], str, NULL)) {
+		stream_free(&stream_list->streams[stream_list->len]);
+		return 1;
+	}
+	stream_list->data[stream_list->len] = stream_list->streams[stream_list->len].data;
+	stream_list->len++;
+	return 0;
+}
+
+void stream_list_free(stream_list *stream_list) {
+	for(int i=0; i<stream_list->len; i++ ) {
+		stream_list->data[i] = NULL;
+		stream_free(&stream_list->streams[i]);
+	}
+	stream_list->len=0;
 }
 

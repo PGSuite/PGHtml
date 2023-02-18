@@ -22,8 +22,8 @@ const char *ERRORS[] = {
 	"Not specified directory for processing",                                         //  4
 	"Destination string too small (%d bytes, %d required)",                           //  5
 	"Too many attributes for tag \"%s\"",                                             //  6
-	"Not parse attribute name from position %d of tag \"%s\"",                        //  7
-	"Error open file \"%s\"\n",                                                       //  8
+	"Error parsing HTML tag for position %d",                                         //  7
+	"Error open file \"%s\"",                                                         //  8
 	"Cannot allocate memory (%d bytes)",                                              //  9
 	"Error read file \"%s\"",                                                         // 10
 	"File \"%s\" read partially",                                                     // 11
@@ -31,9 +31,9 @@ const char *ERRORS[] = {
 	"File \"%s\" written partially",                                                  // 13
 	"Error close file \"%s\"",                                                        // 14
 	"Invalid UTF8 first byte (position: %d, text start: \"%.20s\")",                  // 15
-	"Not found \"%s\" for position %d",                                               // 16
-	"Not found char \"}\" for start position %d",                                     // 17
-	"Not found tag \"%s\" for start position %d",                                     // 18
+	"<empty>", //Too many variables (max %d)",                                                    // 16
+	"Error parsing HTML tag: not found char '%c' for position %d",                    // 17
+	"Error parsing HTML element: not found \"%s\" for position %d",                   // 18
 	"SQL error (%s), query start:\n%.80s\n%s",                                        // 19
 	"List size (%d) too small (value=\"%s\")",                                        // 20
 	"Collection value size (%d) too small for string \"%s...\"",                      // 21
@@ -51,7 +51,7 @@ const char *ERRORS[] = {
 	"No data to recieve from socket (timeout %d sec)",                                // 33
 	"Cannot send to socket (errno %d)",                                               // 34
 	"Cannot close socket (errno %d)",                                                 // 35
-	"Cannot initialize mutex",                                                        // 36
+	"Cannot create process (errno %d), command:\n%s",                                 // 36
 	"Cannot lock mutex",                                                              // 37
 	"Cannot unlock mutex",                                                            // 38
 	"Incorrect administration command \"%s\"",                                        // 39
@@ -80,7 +80,7 @@ const char *ERRORS[] = {
 	"Database сonnection error: \n%s",                                                // 62
 	"JSON array index out of range (index: %d, array size: %d)",                      // 63
 	"JSON value type (%d) is not STRING",                                             // 64
-	"Too many SQL parameters (%d)",                                                   // 65
+	"<empty>", //Too many SQL parameters (%d)",                                                   // 65
 	"SQL query returned empty data (query start: \"%.20s\")",                         // 66
 	"Invalid request path (\"%s\")",                                                  // 67
 	"Too many table columns (%d)",                                                    // 68
@@ -93,33 +93,38 @@ const char *ERRORS[] = {
 	"Too many columns in result query (%d)",                                          // 75
 	"Undefined value function for column \"%s\" (type oid: %d)",                      // 76
 	"SQL query returned more than one row (query start: \"%.20s\")",                  // 77
+	"Cannot remove file \"%s\" (errno %d)",                                           // 78
+	"Cannot remove dir \"%s\" (errno %d)",                                            // 79
+	"Too long program arguments",                                                     // 80
+	"Too many (%d) program arguments",                                                // 81
+	"Cannot find attribute \"name\" of HTML tag \"pghtml-var\"",                      // 82
+	"Unsupported HTML tag \"%s\"",                                                    // 83
 	"Unrecognized error"                                                              //
 };
 
-time_t log_time_started;
+int          log_initialized = 0;
+time_t       log_time_started;
+thread_mutex log_mutex;
 
+char log_program_desc[128] = "<program_desc>";
 char log_error_prefix[32] = "<ERROR_PREFIX>-";
-int  log_error_count = 0;
-int  log_prefix = 0;
 char log_file_name[STR_SIZE] = "";
 FILE log_file;
 
-thread_mutex log_mutex;
-
-void _log_error_init_mutex(char *mutex_name) {
-	fprintf(stderr, "%s%03d ", log_error_prefix, 48);
-	fprintf(stderr, ERRORS[48], mutex_name);
-	fprintf(stderr, "\n%s\n", MSG_EXIT_FATAL);
-	exit(2);
+void log_set_program_name(char *program_desc, char *error_prefix) {
+	snprintf(log_program_desc, sizeof(log_program_desc), "%s",  program_desc);
+	snprintf(log_error_prefix, sizeof(log_error_prefix), "%s-", error_prefix);
 }
 
-void _log_initialize(char *error_prefix) {
+int log_get_header(char *header, int header_size) {
+	return str_format(header, header_size, "%s\nversion %s, %s %d bits\n\n", log_program_desc, VERSION, OS_NAME, sizeof(void*)*8);
+}
+
+void _log_initialize() {
 	clock_gettime(0, &log_time_started);
-	int i;
-	for(i=0; i<sizeof(log_error_prefix)-1 && error_prefix[i]; i++) log_error_prefix[i] = error_prefix[i];
-	log_error_prefix[i] = 0;
-	if (_thread_mutex_init_try(&log_mutex))
-		_log_error_init_mutex("log_mutex");
+	if (thread_mutex_init(&log_mutex, "log_mutex"))
+		log_exit_fatal();
+	log_initialized = 1;
 }
 
 int log_get_uptime() {
@@ -128,13 +133,7 @@ int log_get_uptime() {
 	return (int) (t-log_time_started);
 }
 
-int log_get_error_count() {
-	return log_error_count;
-}
-
-
 void _log_print_line_prefix(log_level level) {
-	if (!log_prefix) return;
 	struct timeinfo *timeinfo;
 	struct timespec ts;
 	char prefix[STR_SIZE];
@@ -194,31 +193,29 @@ void log_info(const char* format, ...) {
 
 }
 
-void log_stdout_print_header(char *program_desc) {
-	log_prefix = 1;
-	log_info("%s\nversion %s, %s %d bits\n", program_desc, VERSION, OS_NAME, sizeof(void*)*8);
-}
-
-void log_help(int argc, char *argv[], char *program_desc, char *help) {
+void log_check_help(int argc, char *argv[], char *help) {
 	if (argc!=1 && strcmp(argv[1],"-h") && strcmp(argv[1],"-help") && strcmp(argv[1],"--help") && strcmp(argv[1],"help")) return;
-	printf("%s\nversion %s, %s %d bits\n\n%s", program_desc, VERSION, OS_NAME, sizeof(void*)*8, help);
+	char header[STR_SIZE];
+	if (log_get_header(header, sizeof(header))) {
+		printf("%s\n%s", header, help);
+	}
 	exit(0);
 }
 
 void log_exit_fatal() {
-	thread_mutex_lock(&log_mutex);
-	_log_println_str(LOG_LEVEL_FATAL, MSG_EXIT_FATAL);
-	usleep(1*1000);
-	if (log_file_name[0]==0)
-		fprintf(stderr, "\n");
+	if(log_initialized) {
+		thread_mutex_lock(&log_mutex);
+		_log_println_str(LOG_LEVEL_FATAL, MSG_EXIT_FATAL);
+		usleep(1*1000);
+	} else {
+		fprintf(stderr, "%s\n", MSG_EXIT_FATAL);
+	}
 	exit(2);
 }
 
 void log_exit_stop() {
 	thread_mutex_lock(&log_mutex);
 	_log_println_str(LOG_LEVEL_INFO, MSG_EXIT_STOP);
-	if (log_file_name[0]==0)
-		fprintf(stdout, "\n");
 	exit(0);
 }
 
@@ -231,8 +228,6 @@ int log_error(int error_code, ...) {
 	if (error_code<0 || error_code>=errors_size)
 		error_code=errors_size-1;
 
-	log_error_count++;
-
 	char error_text[LOG_ERROR_TEXT_SIZE];
 
 	snprintf(error_text, sizeof(error_text), "%s%03d ", log_error_prefix, error_code);
@@ -243,12 +238,17 @@ int log_error(int error_code, ...) {
 	vsnprintf(error_text+prefix_len, sizeof(error_text)-prefix_len, ERRORS[error_code], args);
     va_end(args);
 
+	if(!log_initialized) {
+		fprintf(stderr, "%s\n", error_text);
+		return 1;
+	}
+
 	thread_mutex_lock(&log_mutex);
-	usleep(1*1000);
+	usleep(3*1000);
 
 	_log_println_str(LOG_LEVEL_ERROR, error_text);
 
-	usleep(1*1000);
+	usleep(3*1000);
     thread_mutex_unlock(&log_mutex);
 
    	thread_set_last_erorr(error_code, error_text);

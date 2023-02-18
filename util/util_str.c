@@ -3,32 +3,16 @@
 
 #include "utils.h"
 
-int str_find(char *source, int source_size, int pos, char *substr, int ignore_case) {
+int str_find(char *source, int pos, char *substr, int ignore_case) {
 	int substr_length = strlen(substr);
-	for(int i=pos; i<=(source_size-substr_length); i++) {
+	for(int i=pos; 1; i++) {
 		int find = 1;
 		for(int j=0; j<substr_length; j++) {
+			if (!source[i+j]) return -1;
 			if (!ignore_case && source[i+j]!=substr[j]) { find=0; break; }
 			if (ignore_case && tolower(source[i+j])!=tolower(substr[j])) { find=0; break; }
-
 		}
 		if (find) return i;
-	}
-	return -1;
-}
-
-int str_find_char_html(char *html, int html_size, int pos, char c) {
-	char in_str_char = 0;
-	for(int i=pos; i<html_size; i++) {
-		if (!in_str_char && html[i]==c) return i;
-		if (!in_str_char && (html[i]=='"' || html[i]=='\'')) {
-			in_str_char = html[i];
-			continue;
-		}
-		if (in_str_char && in_str_char==html[i]) {
-			in_str_char = 0;
-			continue;
-		}
 	}
 	return -1;
 }
@@ -82,27 +66,26 @@ int str_add(char *dest, int dest_size, ...) {
 }
 
 int str_format(char *dest, int dest_size, char *format, ...) {
-
 	va_list args;
     va_start(args, &format);
-
 	int len = vsnprintf(dest, dest_size, format, args);
-
-	if (len<0) {
-		va_end(args);
-		return log_error(54, "str_format");
-	}
-
-	int len_dest=strlen(dest);
-
-	if (len!=strlen(dest)) {
-		va_end(args);
-		return log_error( 5, dest_size, len+1);
-	}
-
-    va_end(args);
+	va_end(args);
+	if (len<0) return log_error(54, format);
+	if (len!=strlen(dest)) return log_error(5, dest_size, len+1);
     return 0;
 }
+
+int str_add_format(char *dest, int dest_size, char *format, ...) {
+	char str[10*1024];
+	va_list args;
+    va_start(args, &format);
+	int len = vsnprintf(str, sizeof(str), format, args);
+	va_end(args);
+	if (len<0) return log_error(54, format);
+	if (len!=strlen(str)) return log_error( 5, sizeof(str), len+1);
+    return str_add(dest, dest_size, str, NULL);
+}
+
 
 
 int str_insert_char(char *str, int str_size, int pos, char c) {
@@ -120,6 +103,12 @@ int str_delete_char(char *str, int pos) {
 		str[i] = str[i+1];
 	return 0;
 }
+
+void str_replace_char(char *str, char c_old, char c_new) {
+	for(int i=0; str[i]; i++)
+		if (str[i]==c_old) str[i]=c_new;
+}
+
 
 int str_escaped_char(char *c) {
 	if (*c=='"' || *c=='\\')  return -1;
@@ -185,36 +174,6 @@ int str_rtrim(char *dest, int dest_size, int len) {
     return 0;
 }
 
-int str_tag_attributes(char *tag, str_map *attributes) {
-	int pos_begin,pos_end;
-	int tag_len = strlen(tag);
-	int tag_attributes_size_max = sizeof(attributes->keys)/sizeof(attributes->keys[0]);
-	attributes->len = 0;
-	for(int pos=0; pos<tag_len; pos++) {
-		if (tag[pos]=='=') {
-			if (attributes->len==tag_attributes_size_max)
-				return log_error(6, tag);
-			for(pos_end = pos-1; pos_end>0 && (tag[pos_end]==' ' || tag[pos_end]=='\t');  pos_end--);
-			for(pos_begin = pos_end-1; pos_begin>0 && tag[pos_begin]!=' ' && tag[pos_begin]!='\t';  pos_begin--);
-			if (pos_begin==0 || pos_end==0)
-				return log_error(7, pos, tag);
-			pos_begin++;
-			if (str_substr(attributes->keys[attributes->len], sizeof(attributes->keys[0]), tag, pos_begin, pos_end))
-				return 1;
-			for(pos_begin = pos+1; pos_begin<tag_len && (tag[pos_begin]==' ' || tag[pos_begin]=='\t');  pos_begin++);
-			if (pos_begin==tag_len || (tag[pos_begin]!='"' && tag[pos_begin]!='\'')  )
-				return log_error(7, pos, tag);
-			for(pos_end = pos_begin+1; pos_end<tag_len && tag[pos_end]!=tag[pos_begin]; pos_end++);
-			if (pos_end==tag_len)
-				return log_error(7, pos, tag);
-			if (str_substr(attributes->values[attributes->len], sizeof(attributes->values[0]), tag, pos_begin+1, pos_end-1))
-				return 1;
-			attributes->len++;
-		}
-	}
-	return 0;
-}
-
 void str_map_clear(str_map *map) {
 	map->len = 0;
 }
@@ -270,34 +229,6 @@ int str_list_split(str_list *list, char *data, int pos_begin, int pos_end, char 
 		value[value_size]=0;
 	}
 	if (str_list_add(list, value)) return 1;
-	return 0;
-}
-
-int str_list_println(str_list *list, char delimeter, char *prefix) {
-	stream info;
-	stream_init(&info);
-	for(int i=0; i<list->len; i++) {
-		if ( (i>0 && stream_add_char(&info, delimeter)) || stream_add_str(&info, list->values[i], NULL)) {
-			stream_free(&info);
-			return 1;
-		}
-	}
-	log_info("%s%s", prefix, info.data);
-	stream_free(&info);
-	return 0;
-}
-
-int str_map_println(str_map *map, char delimeter, char *prefix) {
-	stream info;
-	stream_init(&info);
-	for(int i=0; i<map->len; i++) {
-		if ( (i>0 && stream_add_char(&info, delimeter)) || stream_add_str(&info, map->keys[i], "=", NULL) || stream_add_str_escaped(&info, map->values[i])) {
-			stream_free(&info);
-			return 1;
-		}
-	}
-	log_info("%s%s", prefix, info.data);
-	stream_free(&info);
 	return 0;
 }
 

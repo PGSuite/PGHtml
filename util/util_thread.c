@@ -21,19 +21,14 @@ thread threads[THREADS_SIZE];
 
 thread_mutex threads_mutex;
 
-int _thread_mutex_init_try(thread_mutex *mutex) {
+int thread_mutex_init(thread_mutex *mutex, char *mutex_name) {
 	#ifdef _WIN32
 		*mutex = CreateMutex(NULL, FALSE, NULL);
-		return *mutex==NULL;
+		if (*mutex!=NULL) return 0;
 	#else
-		return pthread_mutex_init(mutex, NULL);
+		if (!pthread_mutex_init(mutex, NULL)) return 0;
 	#endif
-}
-
-int thread_mutex_init(thread_mutex *mutex) {
-	if (_thread_mutex_init_try(mutex))
-		return log_error(36);
-	return 0;
+	return log_error(48, mutex_name);
 }
 
 void thread_mutex_destroy(thread_mutex *mutex) {
@@ -67,8 +62,8 @@ void thread_mutex_unlock(thread_mutex *mutex) {
 }
 
 void _thread_initialize(char *error_prefix) {
-	if (_thread_mutex_init_try(&threads_mutex))
-		_log_error_init_mutex("threads_mutex");
+	if (thread_mutex_init(&threads_mutex, "threads_mutex"))
+		log_exit_fatal();
 	threads[0].used = 1;
 	threads[0].id =	CURRENT_THREAD_ID;
 	threads[0].last_error_code = 0;
