@@ -8,84 +8,80 @@
 
 #include "utils.h"
 
-#define SQL_SESSION_ID "select " PG_SQL_SESSION_ID_COLUMN " from pg_stat_activity where pid=pg_backend_pid()"
-
-pg_connection pg_connections[PG_CONNECTIONS_SIZE];
-thread_mutex  pg_connections_mutex;
+// pg_connection pg_connections[PG_CONNECTIONS_SIZE];
+pg_connection *pg_connections;
 
 void _pg_initialize(char *error_prefix) {
-	if (thread_mutex_init(&pg_connections_mutex, "pg_connections_mutex"))
+	if (thread_mem_alloc(&pg_connections, sizeof(pg_connection)*PG_CONNECTIONS_SIZE))
 		log_exit_fatal();
-	for(int i=0; i<PG_CONNECTIONS_SIZE; i++)
-		pg_connections[i].assigned = 0;
+	for(int i=0; i<PG_CONNECTIONS_SIZE; i++) {
+		if (thread_mutex_init(&pg_connections[i].mutex, "pg_connections_mutex"))
+			log_exit_fatal();
+		pg_connections[i].index          = i;
+		pg_connections[i].assigned       = 0;
+		pg_connections[i].activity_id[0] = 0;
+		pg_connections[i].key[0]         = 0;
+	}
 }
 
 int pg_select_str(char *str, int str_size, PGconn *pg_conn, char *query, int params_len, ...);
 
 int pg_connection_assign(pg_connection **pg_connection, char *uri) {
 	int index;
-	thread_mutex_lock(&pg_connections_mutex);
-	for(index=0; index<PG_CONNECTIONS_SIZE && pg_connections[index].assigned; index++);
-	if (index==PG_CONNECTIONS_SIZE) {
-		thread_mutex_unlock(&pg_connections_mutex);
-		return log_error(59, PG_CONNECTIONS_SIZE);
+	for(index=0; index<PG_CONNECTIONS_SIZE; index++) {
+		if (pg_connections[index].assigned) continue;
+		if (thread_mutex_try_lock(&pg_connections[index].mutex)) continue;
+		if (pg_connections[index].assigned) {
+			thread_mutex_unlock(&pg_connections[index].mutex);
+			continue;
+		} else {
+			pg_connections[index].assigned = 1;
+			thread_mutex_unlock(&pg_connections[index].mutex);
+			break;
+		}
 	}
-	pg_connections[index].assigned = 1;
-	thread_mutex_unlock(&pg_connections_mutex);
+	if (index==PG_CONNECTIONS_SIZE) return log_error(59, PG_CONNECTIONS_SIZE);
 	PGconn *pg_conn;
 	if (pg_connect(&pg_conn, uri)) {
 		pg_connections[index].assigned = 0;
 		return 1;
 	}
 	pg_connections[index].conn = pg_conn;
-    char session_id[STR_SIZE];
-	if (pg_select_str(session_id, sizeof(session_id), pg_conn, SQL_SESSION_ID, NULL) ||
-		str_format(pg_connections[index].id, sizeof(pg_connections[index].id), "%03d-%s", index, session_id))
-	{
+	if (pg_select_str(pg_connections[index].activity_id, sizeof(pg_connections[index].activity_id), pg_conn, PG_SQL_ACTIVITY_ID " where pid=pg_backend_pid()", NULL)) {
 		pg_connection_free(&pg_connections[index]);
 		return 1;
 	}
-	if (thread_mutex_init(&pg_connections[index].mutex, "pg_connection.mutex")) {
-		pg_connection_free(&pg_connections[index]);
-		return 1;
+	int t = time(0);
+	srand(t+index);
+	for(int i=0; i<PG_CONNECTION_KEY_SIZE-1; i++) {
+		int r = (i<6 ? t/(i+1) : i==6 ? strlen(uri) : i==7 ? index: rand())%36;
+		pg_connections[index].key[i] = (i%9==8) ? '-' : r<10 ? '0'+r : 'A'+(r-10);
 	}
+	pg_connections[index].key[PG_CONNECTION_KEY_SIZE-1] = 0;
 	pg_connections[index].assigned = 2;
-    log_info("pg_connections[%d] assigned, id: %s", index, pg_connections[index].id);
+    log_info("pg_connections[%d] assigned, activity_id: %s", index, pg_connections[index].activity_id);
 	*pg_connection = &pg_connections[index];
     return 0;
 }
 
-int pg_connection_id_list(stream *list) {
-	stream_clear(list);
-	thread_mutex_lock(&pg_connections_mutex);
-	int res = 0;
+int pg_connection_array_sql(stream *array) {
+	stream_clear(array);
+	if (stream_add_char(array, '{')) return 1;
 	for(int i=0; i<PG_CONNECTIONS_SIZE; i++) {
 		if (pg_connections[i].assigned!=2) continue;
-		if (stream_add_str(list, list->len>0 ? "," : "" , pg_connections[i].id, NULL)) { res = 1; break; };
+		char array_item[sizeof(pg_connections[i].activity_id)+20];
+		if (str_format(array_item, sizeof(array_item), "\"{%d,%s}\"", pg_connections[i].index, pg_connections[i].activity_id)) return 1;
+		if (stream_add_str(array, array->len>1 ? "," : "", array_item, NULL))  return 1;
 	}
-	thread_mutex_unlock(&pg_connections_mutex);
-	return res;
+	if (stream_add_char(array, '}')) return 1;
+	return 0;
 }
 
-int pg_connection_lock(pg_connection **pg_connection, char *connection_id) {
-	if (connection_id[0]==0 || connection_id[1]==0 || connection_id[2]==0 || connection_id[3]!='-')
-		return log_error(60, connection_id);
-	int index = 0;
-	for(int i=0; i<3; i++) {
-		char c = connection_id[i];
-		if (c<'0' || c>'9')
-			return log_error(60, connection_id);
-		index = index*10 + (c-'0');
-	}
-	if (index>=PG_CONNECTIONS_SIZE)
-		return log_error(60, connection_id);
-	thread_mutex_lock(&pg_connections_mutex);
-	if(pg_connections[index].assigned!=2 && strcmp(pg_connections[index].id, connection_id)) {
-		thread_mutex_unlock(&pg_connections_mutex);
-		return log_error(61, connection_id);
-	}
+int pg_connection_lock(pg_connection **pg_connection, int index) {
+	if (index<0 || index>=PG_CONNECTIONS_SIZE)
+		return log_error(60, index);
 	thread_mutex_lock(&pg_connections[index].mutex);
-	thread_mutex_unlock(&pg_connections_mutex);
+	if (pg_connections[index].assigned!=2) return log_error(71);
 	*pg_connection = &pg_connections[index];
 	return 0;
 }
@@ -94,15 +90,25 @@ void pg_connection_unlock(pg_connection *pg_connection) {
 	thread_mutex_unlock(&pg_connection->mutex);
 }
 
+int pg_connection_check_key(int index, char *key) {
+	if (strcmp(pg_connections[index].key,key)) return log_error(65);
+	return 0;
+}
+
 void pg_connection_free(pg_connection *pg_connection) {
+	pg_connection->assigned       = 3;
+	pg_connection->activity_id[0] = 0;
+	pg_connection->key[0]         = 0;
 	pg_disconnect(&(pg_connection->conn));
-	thread_mutex_lock(&pg_connections_mutex);
-	pg_connection->assigned = 3;
-	thread_mutex_destroy(&pg_connection->mutex);
 	pg_connection->assigned = 0;
-	log_info("pg_connections[%d] freed, id: %s", (pg_connection-&pg_connections[0]), pg_connection->id);
-	pg_connection->id[0] = 0;
-	thread_mutex_unlock(&pg_connections_mutex);
+	log_info("pg_connections[%d] freed, activity_id: %s", (pg_connection-&pg_connections[0]), pg_connection->activity_id);
+}
+
+void pg_connection_try_free(int index, char *activity_id) {
+	if (thread_mutex_try_lock(&pg_connections[index].mutex)) return;
+	if (pg_connections[index].assigned==2)
+		pg_connection_free(&pg_connections[index]);
+	thread_mutex_unlock(&pg_connections[index].mutex);
 }
 
 int pg_uri_build(char *uri, int uri_size, char *host, char *port, char *db_name, char *user, char *password) {
@@ -110,8 +116,8 @@ int pg_uri_build(char *uri, int uri_size, char *host, char *port, char *db_name,
 	if (host!=NULL && str_add(uri, uri_size, host, NULL)) return 1;
 	if (port!=NULL && str_add(uri, uri_size, ":", port, NULL)) return 1;
 	if (str_add(uri, uri_size, "/", db_name, "?connect_timeout=10", NULL)) return 1;
-	if (user!=NULL      && str_add(uri, uri_size, "&user=", user, NULL)) return 1;
-	if (password !=NULL && str_add(uri, uri_size, "&password=", password, NULL)) return 1;
+	if (user!=NULL     && str_add(uri, uri_size, "&user=", user, NULL)) return 1;
+	if (password!=NULL && str_add(uri, uri_size, "&password=", password, NULL)) return 1;
 	return 0;
 }
 
@@ -149,7 +155,7 @@ int pg_connect(PGconn **pg_conn, char *uri) {
     }
     PQsetClientEncoding(*pg_conn, PG_CLIENT_ENCODING);
     PQsetNoticeProcessor(*pg_conn, _PQnoticeProcessorDisable, NULL);
-    log_info("connected, pid: %d, user: %s, client_encoding: %s, server version: %d", PQbackendPID(*pg_conn), PQuser(*pg_conn), pg_encoding_to_char(PQclientEncoding(*pg_conn)), PQserverVersion(*pg_conn));
+    log_info("connected to database, pid: %d, user: %s, client_encoding: %s, server version: %d", PQbackendPID(*pg_conn), PQuser(*pg_conn), pg_encoding_to_char(PQclientEncoding(*pg_conn)), PQserverVersion(*pg_conn));
     return 0;
 }
 

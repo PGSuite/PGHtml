@@ -53,14 +53,10 @@ int http_recv_request(tcp_socket socket_connection, http_request *request) {
 		#ifdef _WIN32
 			|| (buffer_len<0 && tcp_errno==10060)
 		#endif
-		) {
-			log_error(33, TCP_TIMEOUT);
-			return -1;
-		}
-		if (buffer_len<0) {
-			log_error(45, tcp_errno);
-			return -1;
-		}
+		)
+			return log_warn(901, TCP_TIMEOUT);
+		if (buffer_len<0)
+			return log_warn(902, tcp_errno);
 		int i=0;
 		if (!received_method   && _http_recv_var(socket_connection, buffer, buffer_len, &i, ' ',  &request->method,   &var_len, sizeof(request->method),   &received_method))   return 1;
 		if (!received_path     && _http_recv_var(socket_connection, buffer, buffer_len, &i, ' ',  &request->path,     &var_len, sizeof(request->path),     &received_path))     return 1;

@@ -1,6 +1,8 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
+#define UTILS_MAX(a,b) (((a)>(b))?(a):(b))
+
 // file --------------------------------------------------------------------------------------------
 
 #ifdef _WIN32
@@ -16,10 +18,16 @@
 
 // log ---------------------------------------------------------------------------------------------
 
-#define LOG_ERROR_TEXT_SIZE 512
+#define LOG_TEXT_SIZE 1024
 
 #define LOG_ERROR_NOT_FOUND_CURRENT_THREAD_CODE 58
 #define LOG_ERROR_NOT_FOUND_CURRENT_THREAD_TEXT "Not found current thread"
+
+#ifdef TRACE
+   #define log_trace(format, ...) _log_trace(__func__, __FILE__, __LINE__, format, __VA_ARGS__);
+#else
+   #define log_trace(format, ...)
+#endif
 
 // tcp ---------------------------------------------------------------------------------------------
 
@@ -35,6 +43,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <netdb.h>
+#include <arpa/inet.h>
 #define tcp_socket int
 #define tcp_errno  errno
 
@@ -42,6 +52,8 @@
 
 #define TCP_TIMEOUT 5
 
+extern char tcp_host_name[256];
+extern char tcp_host_addr[32];
 
 // stream ---------------------------------------------------------------------------------------
 
@@ -50,6 +62,7 @@ typedef struct
 	int	 len;
 	int	 size;
 	char *data;
+	int last_add_str_unescaped;
 } stream;
 
 typedef struct
@@ -140,15 +153,13 @@ typedef struct
 
 typedef struct
 {
-
-	int used;
+	unsigned char used;
 	thread_sys_id sys_id;
 	unsigned int id;
 	char name[THREAD_NAME_SIZE];
 	tcp_socket socket_connection;
 	int last_error_code;
-	char last_error_text[LOG_ERROR_TEXT_SIZE];
-
+	char last_error_text[LOG_TEXT_SIZE];
 } thread;
 
 
@@ -160,7 +171,7 @@ typedef struct
 
 #define STR_COLLECTION_SIZE        30
 #define STR_COLLECTION_KEY_SIZE    50
-#define STR_COLLECTION_VALUE_SIZE 300
+#define STR_COLLECTION_VALUE_SIZE 200
 
 typedef struct
 {
@@ -176,26 +187,26 @@ typedef struct
 	char values[STR_COLLECTION_SIZE][STR_COLLECTION_VALUE_SIZE];
 } str_list;
 
-
 // pg ----------------------------------------------------------------------------------------------
 
 #include <libpq-fe.h>
 
 #define PG_CLIENT_ENCODING "UTF8"
 
-#define PG_CONNECTIONS_SIZE  1000
-#define PG_SQL_PARAMS_SIZE   256
+#define PG_CONNECTIONS_SIZE     1000
+#define PG_CONNECTION_KEY_SIZE  (8*(8+1))
+#define PG_SQL_PARAMS_SIZE      256
 
-#define PG_SQL_SESSION_ID_COLUMN   "upper(md5(pid||'-'||to_char(backend_start, 'yyyymmdd-hh24miss-us'))) session_id"
+#define PG_SQL_ACTIVITY_ID  "select pid||'-'||to_char(backend_start, 'yyyymmdd-hh24miss-us') activity_id from pg_stat_activity"
 
 typedef struct
 {
-
-	int assigned;
+	int index;
+	unsigned char assigned;
 	thread_mutex mutex;
-	char id[50];
+	char activity_id[40];
+	char key[8*(8+1)];
 	PGconn *conn;
-
 } pg_connection;
 
 #endif /* UTILS_H_ */

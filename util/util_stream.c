@@ -13,6 +13,7 @@ int stream_init(stream *stream) {
 	stream->size = STREAM_SIZE_INIT-1;
 	stream->data[0] = 0;
 	stream->len = 0;
+	stream->last_add_str_unescaped = 0;
 	return 0;
 }
 
@@ -57,6 +58,7 @@ int _stream_resize(stream *stream, int size_need) {
 }
 
 int stream_add_substr(stream *stream, char *source, int pos_begin, int pos_end) {
+	stream->last_add_str_unescaped = 0;
 	if(pos_begin<0 || pos_end<0 || pos_begin>pos_end)
 		return log_error(54, "stream_add_substr");
 	if (_stream_resize(stream, (pos_end - pos_begin) + 1)) return 1;
@@ -99,6 +101,7 @@ int stream_add_substr_escaped(stream *stream, char *source, int pos_begin, int p
 		if (stream_add_char(stream, c)) return 1;
 	}
 	if (stream_add_char(stream, '"')) return 1;
+	stream->last_add_str_unescaped = 0;
     return 0;
 }
 
@@ -110,6 +113,7 @@ int stream_add_substr_unescaped(stream *stream, char *source, int pos_begin, int
 	if (source[pos_begin]!='"') {
 		return stream_add_substr(stream, source, pos_begin, pos_end);
 	}
+	stream->last_add_str_unescaped = 1;
 	int pos=pos_begin+1;
 	int esc = 0;
 	for(; pos<pos_end; pos++) {

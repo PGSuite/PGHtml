@@ -63,9 +63,8 @@ int file_write(char *path, stream *file_body) {
 //   -3 - equals
 int file_write_if_changed(char *path, stream *file_body) {
     struct stat file_stat;
-    stat(path, &file_stat);
     int result;
-    if (file_stat.st_dev==0)
+    if (stat(path, &file_stat) || file_stat.st_dev==0)
     	result = -1;
     else {
     	stream file_body_old;
@@ -104,7 +103,7 @@ int file_remove(char *filepath, int remove_empty_dir) {
 		if (file_dir(dir, sizeof(dir), filepath))
 			return 1;
 		if (rmdir(dir))
-			if(errno!=41) return log_error(79, dir, errno);
+			if(errno!=39 && errno!=41) return log_error(79, dir, errno);
 	}
 	return 0;
 }

@@ -1,8 +1,8 @@
 ## PGHtml | Template engine using PostgreSQL
 
-### [Download](http://pghtml.org/en/download/) ### 
-### [Documentation](http://pghtml.org/en/documentation/) ### 
-### [Example](http://pghtml.org/en/#example) ### 
+### [Download](https://pghtml.org/en/download/) ### 
+### [Documentation](https://pghtml.org/en/documentation/) ### 
+### [Example](https://pghtml.org/en/#example) ### 
   
 ### Description ###
 

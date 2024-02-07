@@ -205,6 +205,19 @@ int json_get_bool(int *value, json *json, int error_on_not_found, ...) {
 	return 0;
 }
 
+int json_get_int(int *value, json *json, int error_on_not_found, ...) {
+	va_list args;
+	va_start(args, &error_on_not_found);
+	json_entry *entry;
+	int find = _json_find_entry(&entry, json, error_on_not_found, STRING, args);
+	va_end(args);
+	if (find) return find;
+	char value_str[16];
+	if (str_substr(value_str, sizeof(value_str), json->source, entry->value_begin, entry->value_end)) return 1;
+	*value = atoi(value_str);
+	return 0;
+}
+
 int json_get_stream(stream *stream, json *json, int error_on_not_found, ...) {
 	va_list args;
 	va_start(args, &error_on_not_found);
@@ -226,7 +239,7 @@ int json_get_array_entry(json_entry **entry_array, json *json, int error_on_not_
 	return find;
 }
 
-int json_get_array_stream(char *stream, json *json, json_entry *entry_array, int index) {
+int json_get_array_stream(stream *stream, json *json, json_entry *entry_array, int index) {
 	if (index<0 || index>=entry_array->array_size)
 		return log_error(63, entry_array->array_size, index);
 	json_entry *entry_element = entry_array+1+index;

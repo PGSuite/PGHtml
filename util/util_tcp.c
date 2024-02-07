@@ -3,6 +3,9 @@
 
 #include "utils.h"
 
+char tcp_host_name[256] = "";
+char tcp_host_addr[32]  = "";
+
 int tcp_startup() {
     #ifdef _WIN32
 		WSADATA wsa_data;
@@ -10,6 +13,12 @@ int tcp_startup() {
 			return log_error(27, WSAGetLastError());
 		// log_info("Windows Socket Architecture (WSA) started, status: \"%s\"", wsa_data.szSystemStatus);
 	#endif
+	if (gethostname(tcp_host_name, sizeof(tcp_host_name))) return log_warn(903, tcp_errno);
+	struct hostent *host_ent;
+	host_ent = gethostbyname(tcp_host_name);
+	if (host_ent==NULL) return log_warn(903, tcp_errno);
+	if (host_ent->h_addrtype==AF_INET && host_ent->h_addr!=NULL)
+		if (str_copy(tcp_host_addr, sizeof(tcp_host_addr), inet_ntoa (*(struct in_addr*)host_ent->h_addr))) return 1;
 	return 0;
 }
 
@@ -92,12 +101,10 @@ int tcp_recv_str(tcp_socket socket, char *str, int str_size) {
 			|| (recv_len<0 && tcp_errno==10060)
 		#endif
 		) {
-			log_error(33, TCP_TIMEOUT);
-			return -1;
+			return log_warn(901, TCP_TIMEOUT);
 		}
 		if (recv_len<0) {
-			log_error(45, tcp_errno);
-			return -1;
+			return log_warn(902, tcp_errno);
 		}
 		if (str_len+recv_len>str_size)
 			return log_error(5, str_size, str_len+recv_len);
@@ -125,4 +132,7 @@ int tcp_socket_close(tcp_socket socket) {
 	#endif
 			return log_error(35, tcp_errno);
 	return 0;
+}
+
+int tcp_host_info(char *host_name, int host_name_size, char *host_addr, int host_addr_size) {
 }

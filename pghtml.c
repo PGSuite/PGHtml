@@ -44,7 +44,7 @@ char HELP[] =
 int main(int argc, char *argv[])
 {
 
-	log_set_program_name("PGHtml is utility for creation an html files using data from PostgreSQL", "PGHTML");
+	log_set_program_name("PGHtml is HTML template engine using PostgreSQL", "PGHTML");
 
 	log_check_help(argc, argv, HELP);
 
@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
 		}
 		else if (strlen(argv[i])>3 && argv[i][1]=='G' && argv[i][2]=='_') {
 		    char g_var_name[STR_SIZE];
-		    if (str_substr(g_var_name, sizeof(g_var_name), argv[i], 1, strlen(argv[i])))
+		    if (str_substr(g_var_name, sizeof(g_var_name), argv[i], 3, strlen(argv[i])))
 		    	exit(3);
 			if (str_map_put(&g_vars, g_var_name, argv[++i]))
 				exit(3);
