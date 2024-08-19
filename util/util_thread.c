@@ -138,7 +138,7 @@ void thread_begin(void *thread_args) {
 	int thread_index = thread_args;
 	threads[thread_index].id = CURRENT_THREAD_ID;
 	threads_map[threads[thread_index].id&THREADS_MAP_MASK] = thread_index;
-	log_info("thread \"%s\" started, thread_id: %u", threads[thread_index].name, threads[thread_index].id);
+	log_info("thread started, thread_id: %u", threads[thread_index].id);
 }
 
 void thread_end(void *thread_args) {

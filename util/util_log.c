@@ -19,7 +19,7 @@ const char *ERRORS[] = {
 	"Any error (default error code)",                                                 //  1
 	"No value for option \"%s\"",                                                     //  2
 	"Non-existent option \"%s\"",                                                     //  3
-	"Not specified directory for processing",                                         //  4
+	"Incorrect directory synchronization interval \"%s\"",                            //  4
 	"Destination string too small (%d bytes, %d required)",                           //  5
 	"Too many attributes for tag \"%s\"",                                             //  6
 	"Error parsing HTML tag for position %d",                                         //  7
@@ -47,14 +47,14 @@ const char *ERRORS[] = {
 	"Cannot bind socket to port %d (errno %d)",                                       // 29
 	"Cannot listen for incoming connections (errno %d)",                              // 30
 	"Cannot accept connection (errno %d)",                                            // 31
-	"Cannot set timeout (errno %d)",                                                  // 32
+	"Cannot set TCP timeout (errno %d)",                                              // 32
 	"Too many table relations (%d)",                                                  // 33
 	"Cannot send to socket (errno %d)",                                               // 34
 	"Cannot close socket (errno %d)",                                                 // 35
 	"Cannot create process (errno %d), command:\n%s",                                 // 36
 	"Cannot lock mutex",                                                              // 37
 	"Cannot unlock mutex",                                                            // 38
-	"Incorrect administration command \"%s\"",                                        // 39
+	"Incorrect execution command \"%s\"",                                             // 39
 	"SQL query executed without returning data (query start: \"%.20s\")",             // 40
 	"Not option \"%s\"",                                                              // 41
 	"Incorrect port number \"%s\"",                                                   // 42
@@ -118,7 +118,6 @@ thread_mutex  log_mutex;
 char log_program_desc[128] = "<program_desc>";
 char log_error_prefix[32] = "<ERROR_PREFIX>-";
 char log_file_name[STR_SIZE] = "";
-FILE log_file;
 
 void log_set_program_name(char *program_desc, char *error_prefix) {
 	snprintf(log_program_desc, sizeof(log_program_desc), "%s",  program_desc);
@@ -126,13 +125,15 @@ void log_set_program_name(char *program_desc, char *error_prefix) {
 }
 
 int log_get_header(char *header, int header_size) {
-	return str_format(header, header_size, "%s\nversion %s, %s %d bits\n\n", log_program_desc, VERSION, OS_NAME, sizeof(void*)*8);
+	return str_format(header, header_size, "%s\nversion %s, %s %d bits\n", log_program_desc, VERSION, OS_NAME, sizeof(void*)*8);
 }
 
-void _log_initialize() {
+void _log_initialize(char *log_file) {
 	clock_gettime(0, &log_time_started);
 	if (thread_mutex_init(&log_mutex, "log_mutex"))
 		log_exit_fatal();
+	if (log_file!=NULL)
+		_log_set_file(log_file);
 	log_initialized = 1;
 }
 
@@ -143,15 +144,21 @@ int log_get_uptime() {
 }
 
 void _log_println_text(log_level level, const char *text, int exit_code) {
+	FILE *stream = LOG_LEVEL_STREAM(level);
+	if (!log_initialized) {
+		fprintf(stream, "%s\n", text);
+		fflush(stream);
+		if (exit_code!=-1) exit(exit_code);
+		return;
+	}
 	char prefix[128];
 	struct timespec ts;
 	clock_gettime(0, &ts);
 	int prefix_len = strftime(prefix,sizeof(prefix),"%Y-%m-%d %H:%M:%S",localtime(&ts.tv_sec));
 	thread *thread_current;
 	thread_get_current(&thread_current);
-	snprintf(prefix+prefix_len, sizeof(prefix)-prefix_len, ".%03ld %-5s %-11s  ", ts.tv_nsec/1000000L, LOG_LEVEL_NAMES[level], thread_current!=NULL ? thread_current->name : "");
-	FILE *stream = LOG_LEVEL_STREAM(level);
-	if (log_initialized) thread_mutex_lock(&log_mutex);
+	snprintf(prefix+prefix_len, sizeof(prefix)-prefix_len, ".%03ld %-5s %-12s  ", ts.tv_nsec/1000000L, LOG_LEVEL_NAMES[level], thread_current!=NULL ? thread_current->name : "");
+	thread_mutex_lock(&log_mutex);
 	fputs(prefix, stream);
 	for(int i=0; text[i]; i++) {
 		putc(text[i], stream);
@@ -160,12 +167,12 @@ void _log_println_text(log_level level, const char *text, int exit_code) {
 	}
 	putc('\n', stream);
 	if (exit_code!=-1) exit(exit_code);
-	if (log_initialized) thread_mutex_unlock(&log_mutex);
+	thread_mutex_unlock(&log_mutex);
     fflush(stream);
 }
 
 void log_check_help(int argc, char *argv[], char *help) {
-	if (argc!=1 && strcmp(argv[1],"-h") && strcmp(argv[1],"-help") && strcmp(argv[1],"--help") && strcmp(argv[1],"help")) return;
+	if (argc!=1  && strcmp(argv[1],"help") && strcmp(argv[1],"man") && strcmp(argv[1],"-help") && strcmp(argv[1],"--help")) return;
 	char header[STR_SIZE];
 	if (!log_get_header(header, sizeof(header))) {
 		printf("%s\n%s", header, help);
@@ -237,20 +244,20 @@ void _log_trace(char *src_func, char *src_file, int src_line, const char* format
 	_log_println_text(LOG_LEVEL_TRACE, text, -1);
 }
 
-void log_set_file(char *value) {
-	if (!freopen(value, "a", stdout)) {
+void _log_set_file(char *log_file) {
+	if (!freopen(log_file, "a", stdout)) {
 		log_info("");
-		log_error(25, errno, value, "stdout");
+		log_error(25, errno, log_file, "stdout");
 		exit(2);
 	}
 	fseek(stdout, 0, SEEK_END);
 	if (ftello(stdout)!=0) {
 		fprintf(stdout, "\n");
 	}
-	if (!freopen(value, "a", stderr)) {
-		log_info(ERRORS[25], errno, value, "stderr");
+	if (!freopen(log_file, "a", stderr)) {
+		log_info(ERRORS[25], errno, log_file, "stderr");
 		exit(2);
 	}
-	if (str_copy(log_file_name, sizeof(log_file_name), value))
+	if (str_copy(log_file_name, sizeof(log_file_name), log_file))
 		exit(2);
 }

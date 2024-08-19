@@ -2,16 +2,39 @@
 
 #include "util/utils.h"
 
-#define FILE_EXTENTIONS_SEPARATOR ":"
-#define FILE_EXTENTIONS_DEFAULT   "pghtml" FILE_EXTENTIONS_SEPARATOR "pgtxt" FILE_EXTENTIONS_SEPARATOR "pgjs" FILE_EXTENTIONS_SEPARATOR "pgjson" FILE_EXTENTIONS_SEPARATOR "pgxml"
-
 #define TAG_PGHTML_INCLUDE  "pghtml-include"
 #define TAG_PGHTML_VAR      "pghtml-var"
-#define TAG_PGHTML_SQL      "pghtml-sql"
 
-extern str_list directories;
-extern str_list file_extensions;
+#ifdef _WIN32
 
-extern str_map g_vars;
+#define HTTP_DIRECTORY_DEFAULT "C:\\Site"
+#define LOG_FILE_DEFAULT       "C:\\Site\\log\\pgorm.log"
 
-extern PGconn *pg_conn;
+#else
+
+#define HTTP_DIRECTORY_DEFAULT "/site"
+#define LOG_FILE_DEFAULT       "/var/log/pgorm/pgorm.log"
+
+#endif
+
+#define HTTP_SYNC_INTERVAL_DEFAULT  "600"
+#define HTTP_PORT_DEFAULT           "5480"
+
+#define DB_PORT_DEFAULT          "5432"
+#define DB_NAME_DEFAULT          "site"
+#define DB_SERVICE_USER_DEFAULT  "postgres"
+
+#define ADMIN_PORT_OFFSET 10000
+
+extern char *db_host;
+extern char *db_port;
+extern char *db_name;
+extern char *db_service_host;
+extern char *db_service_user;
+extern char db_service_uri[256];
+
+extern char *http_directory;
+extern int  http_sync_interval;
+extern int  http_port;
+
+extern int  admin_port;

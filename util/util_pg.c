@@ -4,11 +4,9 @@
 #include <sys/stat.h>
 
 #include <libpq-fe.h>
-// #include <server/catalog/pg_type_d.h>
 
 #include "utils.h"
 
-// pg_connection pg_connections[PG_CONNECTIONS_SIZE];
 pg_connection *pg_connections;
 
 void _pg_initialize(char *error_prefix) {
@@ -115,9 +113,9 @@ int pg_uri_build(char *uri, int uri_size, char *host, char *port, char *db_name,
 	if (str_copy(uri, uri_size, "postgresql://")) return 1;
 	if (host!=NULL && str_add(uri, uri_size, host, NULL)) return 1;
 	if (port!=NULL && str_add(uri, uri_size, ":", port, NULL)) return 1;
-	if (str_add(uri, uri_size, "/", db_name, "?connect_timeout=10", NULL)) return 1;
-	if (user!=NULL     && str_add(uri, uri_size, "&user=", user, NULL)) return 1;
-	if (password!=NULL && str_add(uri, uri_size, "&password=", password, NULL)) return 1;
+	if (str_add(uri, uri_size, "/", db_name, NULL)) return 1;
+	if (user!=NULL     && str_add(uri, uri_size, "?user=", user, NULL)) return 1;
+	if (password!=NULL && str_add(uri, uri_size, user!=NULL ? "&" : "?", "password=", password, NULL)) return 1;
 	return 0;
 }
 

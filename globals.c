@@ -2,24 +2,32 @@
 
 #include "globals.h"
 
-str_list directories;
-str_list file_extensions;
+char *http_directory = HTTP_DIRECTORY_DEFAULT;
+int  http_sync_interval;
+int  http_port;
 
-str_map g_vars;
+char *db_host     = NULL;
+char *db_port     = DB_PORT_DEFAULT;
+char *db_name     = DB_NAME_DEFAULT;
+char *db_service_host = NULL;
+char *db_service_user = DB_SERVICE_USER_DEFAULT;
+char db_service_uri[256];
 
-PGconn *pg_conn;
+int admin_port;
 
 int globals_add_parameters(char *text, int text_size) {
-	if (str_add(text, text_size, "Parameters\n", NULL)) return 1;
-	if (str_add(text, text_size, "  directories (files):  ", NULL)) return 1;
-	for(int i=0; i<directories.len; i++)
-		if (str_add(text, text_size, i>0 ? PATH_SEPARATOR: "", directories.values[i], NULL)) return 1;
-	if (str_add(text, text_size, "\n  file extensions:      ", NULL)) return 1;
-	for(int i=0; i<file_extensions.len; i++)
-		if (str_add(text, text_size, i>0 ? FILE_EXTENTIONS_SEPARATOR: "", file_extensions.values[i], NULL)) return 1;
-	if (str_add(text, text_size, "\n  global variables:     ", NULL)) return 1;
-	for(int i=0; i<g_vars.len; i++)
-		if (str_add(text, text_size, i>0 ? "," : "", g_vars.keys[i], "=", g_vars.values[i], NULL)) return 1;
-	if (str_add(text, text_size, "\n", NULL)) return 1;
+	if (str_add(text, text_size, "\nParameters\n", NULL)) return 1;
+	if (str_add(text, text_size, "  HTTP\n", NULL)) return 1;
+	if (str_add(text, text_size, "    directory:         ", http_directory, "\n", NULL)) return 1;
+	if (str_add_format(text, text_size, "    sync interval:     %ds\n", http_sync_interval)) return 1;
+	if (str_add_format(text, text_size, "    port:              %d\n", http_port)) return 1;
+	if (str_add(text, text_size, "  database\n", NULL)) return 1;
+	if (str_add(text, text_size, "    host:              ", db_host,         "\n", NULL)) return 1;
+	if (str_add(text, text_size, "    port:              ", db_port,         "\n", NULL)) return 1;
+	if (str_add(text, text_size, "    database:          ", db_name,         "\n", NULL)) return 1;
+	if (str_add(text, text_size, "    host for service:  ", db_service_host, "\n", NULL)) return 1;
+	if (str_add(text, text_size, "    user for service:  ", db_service_user, "\n", NULL)) return 1;
+	if (str_add(text, text_size, "  administration\n", NULL)) return 1;
+	if (str_add_format(text, text_size, "    port:              %d\n", admin_port)) return 1;
 	return 0;
 }

@@ -1,45 +1,44 @@
-#include <sys/time.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
 
-#include <libpq-fe.h>
-
-#include "globals.h"
 #include "util/utils.h"
+#include "globals.h"
+
+extern void* admin_server_thread(void *args);
+extern void* file_maker_thread(void *args);
 
 char HELP[] =
 	"Usage:\n" \
-	"  pghtml DIRECTORIES [OPTIONS]\n" \
+	"  pghtml {COMMAND} [OPTIONS]\n" \
 	"\n" \
-	"Parameters:\n" \
-	"  DIRECTORIES        directories or files separated by space\n" \
+	"Commands:\n" \
+	"  start        start execution in another process\n" \
+	"  execute      execute in current process\n" \
+	"  status       show runtime status\n" \
+	"  stop         stop execution\n" \
+	"  sync         only synchronize directory and exit (some options are ignored)\n" \
+	"  help|man     print this help\n" \
 	"\n" \
-	"File options:\n" \
-	"  -e EXTENSIONS      file extensions separated by " FILE_EXTENTIONS_SEPARATOR " (default: " FILE_EXTENTIONS_DEFAULT ")\n" \
+	"HTTP options:\n" \
+	"  -hd DIRECTORY       site directory (default: " HTTP_DIRECTORY_DEFAULT ")\n" \
+	"  -hi INTERVAL        synchronization interval in seconds (default: " HTTP_SYNC_INTERVAL_DEFAULT ")\n" \
+	"  -hp PORT            HTTP port (default: " HTTP_PORT_DEFAULT ")\n" \
 	"\n" \
 	"Connection options:\n" \
-	"  -h HOSTNAME        database server host\n" \
-	"  -p PORT            database server port\n" \
-	"  -d DBNAME          database name\n" \
-	"  -U USERNAME        username (default: current user in operating system)\n" \
-	"  -W PASSWORD        user password in PostgreSQL (if nessesary)\n" \
-	"  or\n" \
-	"  -u URI             database server URI\n" \
-	"\n" \
-	"Variables options:\n" \
-	"  -G_[NAME] VALUE    value of variable [G_NAME] \n" \
+	"  -h HOSTNAME        database server host (default: server IP address)\n" \
+	"  -p PORT            database server port (default: " DB_PORT_DEFAULT ")\n" \
+	"  -d DBNAME          database name (default: " DB_NAME_DEFAULT ")\n" \
+	"  -U USERNAME        username for service only (default: " DB_SERVICE_USER_DEFAULT ")\n" \
+	"  -W PASSWORD        password of user for service (if nessesary)\n" \
 	"\n" \
 	"Logging options:\n" \
-	"  -l  FILE           log file, when specified, the prefix is set to \"ts\"\n" \
-	"  -lu FILE           output file for only created and updated destination files\n" \
-	"\n" \
-	"Info:\n" \
-	"  -h, --help         print this help\n"
+	"  -l  FILE           log file\n" \
 	"\n" \
 	"Examples:\n" \
-	"  pghtml /mysite\n" \
-	"  pghtml /mysite1 /mysite2/index.pghtml -d sitedb -l /tmp/pghtml.log\n" \
-	"  pghtml /mysite -h server-db.mycompany.com -d sitedb -U appuser -W 12345 -lu /tmp/files_updated.lst\n" \
-	"  pghtml /mysite -u postgresql://192.168.10.20:5432/sitedb?user=postgres&password=12345 -G_ENV PROD\n";
-
+	"  pghtml start -d sitedb -l /var/log/pghtml.log\n" \
+	"  pghtml execute -hd /mysite -h server-db.mycompany.com -d sitedb -U admin -W 12345\n" \
+    "  pghtml sync -hd /site/db -d sitedb\n";
 
 int main(int argc, char *argv[])
 {
@@ -48,87 +47,143 @@ int main(int argc, char *argv[])
 
 	log_check_help(argc, argv, HELP);
 
+	if (!strcmp(argv[1],"start")) {
+
+		char *args[20];
+		int args_count=0;
+		int status;
+		int error_code;
+		unsigned int pid;
+		if (sizeof(args)/sizeof(char *)+4<argc) {
+			log_error(81, argc);
+			exit(3);
+		}
+		args[args_count++]=argv[0];
+		args[args_count++]="execute";
+		int log_set = 0;
+		for(int i=2; i<argc; i++) {
+			if (!strcmp(argv[i],"-l")) log_set = 1;
+			args[args_count++]=argv[i];
+		}
+		if (!log_set) {
+			args[args_count++]="-l";
+			args[args_count++]=LOG_FILE_DEFAULT;
+		}
+		args[args_count++]=NULL;
+		char command[32*1024] = "";
+		for(int i=0; i<args_count-1; i++)
+			if (str_add(command, sizeof(command), i>0 ? " " : "", args[i], NULL)) exit(3);
+
+		#ifdef _WIN32
+
+			STARTUPINFO cif;
+			ZeroMemory(&cif,sizeof(STARTUPINFO));
+			PROCESS_INFORMATION pi;
+			status = !CreateProcess(argv[0], command, NULL,NULL,FALSE,NULL,NULL,NULL,&cif,&pi);
+			error_code =  GetLastError();
+			pid = pi.hProcess;
+
+		#else
+
+			status = posix_spawn(&pid, args[0], NULL, NULL, args, NULL);
+
+		#endif
+
+		if (status) {
+			log_error(36, error_code, command);
+			exit(3);
+		}
+		return 0;
+	}
+
+
+	if (!strcmp(argv[1],"stop") || !strcmp(argv[1],"status")) {
+		admin_server_command(argc, argv);
+		exit(0);
+	}
+
+	if (strcmp(argv[1],"execute") && strcmp(argv[1],"sync")) {
+		log_error(39, argv[1]);
+		exit(3);
+	}
+
+	http_sync_interval = atoi(HTTP_SYNC_INTERVAL_DEFAULT);
+	http_port          = atoi(HTTP_PORT_DEFAULT);
+
+	char *db_service_password         = NULL;
+
 	char *log_file   = NULL;
 
-	char *db_host             = "";
-	char *db_port             = NULL;
-	char *db_name             = "";
-	char *db_user             = NULL;
-	char *db_password         = NULL;
-	char db_uri[STR_SIZE] = "";
-
-	char *extentions  = NULL;
-
-	g_vars.len=0;
-
-	str_list_clear(&directories);
-
-	for(int i=1; i<argc; i++) {
+	for(int i=2; i<argc; i++) {
 		if (argv[i][0]!='-') {
-			if (str_list_add(&directories, argv[i]))
-				exit(3);
-			continue;
+			log_error(41, argv[i]);
+			exit(3);
 		}
 		if (i==argc-1) {
 			log_error(2, argv[i]);
 			exit(3);
 		}
-		if (strcmp(argv[i],"-h")==0)   	  db_host=argv[++i];
-		else if (strcmp(argv[i],"-p")==0) db_port=argv[++i];
-		else if (strcmp(argv[i],"-d")==0) db_name=argv[++i];
-		else if (strcmp(argv[i],"-U")==0) db_user=argv[++i];
-		else if (strcmp(argv[i],"-W")==0) db_password=argv[++i];
-		else if (strcmp(argv[i],"-e")==0) extentions=argv[++i];
-		else if (strcmp(argv[i],"-u")==0) {
-			if (str_copy(db_uri, sizeof(db_uri), argv[++i]))
+		if (strcmp(argv[i],"-hd")==0) http_directory=argv[++i];
+		else if (strcmp(argv[i],"-hi")==0) {
+			http_sync_interval = atoi(argv[++i]);
+			if (http_sync_interval<=0) {
+				log_error(4, argv[i]);
 				exit(3);
-		}
-		else if (strlen(argv[i])>3 && argv[i][1]=='G' && argv[i][2]=='_') {
-		    char g_var_name[STR_SIZE];
-		    if (str_substr(g_var_name, sizeof(g_var_name), argv[i], 3, strlen(argv[i])))
-		    	exit(3);
-			if (str_map_put(&g_vars, g_var_name, argv[++i]))
+			}
+		} else if (strcmp(argv[i],"-hp")==0) {
+			http_port = atoi(argv[++i]);
+			if (http_port<=0) {
+				log_error(42, argv[i]);
 				exit(3);
+			}
 		}
-		else if (strcmp(argv[i],"-l")==0) log_file = argv[++i];
-		else if (strcmp(argv[i],"-lu")==0) {
-			if (file_list_updates_open(argv[++i])) return 1;
-		} else {
+		else if (strcmp(argv[i],"-h")==0)  db_host=argv[++i];
+		else if (strcmp(argv[i],"-p")==0)  db_port=argv[++i];
+		else if (strcmp(argv[i],"-d")==0)  db_name=argv[++i];
+		else if (strcmp(argv[i],"-U")==0)  db_service_user=argv[++i];
+		else if (strcmp(argv[i],"-W")==0)  db_service_password=argv[++i];
+		else if (strcmp(argv[i],"-l")==0)  log_file = argv[++i];
+		else {
 			log_error(3, argv[i]);
 			exit(3);
 		}
 	}
-	if (directories.len==0) {
-		log_error(4);
-		exit(3);
-	}
-    if ( strlen(db_uri)==0 && pg_uri_build(db_uri, sizeof(db_uri), db_host, db_port, db_name, db_user, db_password) )
-    	exit(3);
-    if (extentions==NULL) extentions = FILE_EXTENTIONS_DEFAULT;
-    if (str_list_split(&file_extensions, extentions, 0, -1, FILE_EXTENTIONS_SEPARATOR[0])) return 1;
-    for(int i=0; i<file_extensions.len; i++)
-    	if (strlen(file_extensions.values[i])<3 || file_extensions.values[i][0]!='p' || file_extensions.values[i][1]!='g') {
-    		log_error(22, file_extensions.values[i]);
-    		exit(3);
-    	}
 
-	utils_initialize();
+	admin_port = http_port + ADMIN_PORT_OFFSET;
+
+    if (db_host==NULL) db_host = tcp_host_addr[0]!=0 ? tcp_host_addr : "127.0.0.1";
+    db_service_host = !strcmp(db_host,tcp_host_addr) ? "127.0.0.1" : db_host;
+
+	if (pg_uri_build(db_service_uri, sizeof(db_service_uri), db_service_host, db_port, db_name, db_service_user, db_service_password) )
+    	exit(3);
 
 	char header[STR_SIZE];
-	if (log_get_header(header, sizeof(header)) || globals_add_parameters(header, sizeof(header))) exit(2);
-    log_info("%s", header);
+	if (log_get_header(header, sizeof(header))) exit(2);
 
-	if (pg_connect(&pg_conn, db_uri))
+	if (!strcmp(argv[1],"sync")) {
+		log_info("%s", header);
+		PGconn *pg_conn;
+		int res = pg_connect(&pg_conn, db_service_uri);
+		if (!res) {
+			res = file_maker_sync_dir(pg_conn);
+			pg_disconnect(&pg_conn);
+		}
+		exit(res);
+	}
+
+	if (globals_add_parameters(header, sizeof(header))) exit(2);
+	log_info("%s", header);
+
+	utils_initialize(log_file);
+
+	if (tcp_startup()>0) log_exit_fatal();
+
+	if (thread_create(admin_server_thread, "ADMIN_SERVER", NULL))
 		log_exit_fatal();
 
-	int result = process_directories();
+	if (thread_create(file_maker_thread, "FILE_MAKER", NULL))
+		log_exit_fatal();
 
-	pg_disconnect(&pg_conn);
-
-	file_list_updates_close();
-
-    log_info("\n%s", result==0 ? "completed successfully" : "completed with errors");
-
-	exit(result!=0);
+    while(1) sleep(UINT_MAX);
 
 }
