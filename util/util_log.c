@@ -1,5 +1,4 @@
-#include "utils.h"
-#include "util_version.h"
+#include "util.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -19,11 +18,11 @@ const char *ERRORS[] = {
 	"Any error (default error code)",                                                 //  1
 	"No value for option \"%s\"",                                                     //  2
 	"Non-existent option \"%s\"",                                                     //  3
-	"Incorrect directory synchronization interval \"%s\"",                            //  4
+	"Memory leak detected",                                                           //  4
 	"Destination string too small (%d bytes, %d required)",                           //  5
 	"Too many attributes for tag \"%s\"",                                             //  6
 	"Error parsing HTML tag for position %d",                                         //  7
-	"Error open file \"%s\"",                                                         //  8
+	"Error open file \"%s\" (errno %d)",                                              //  8
 	"Cannot allocate memory (%d bytes)",                                              //  9
 	"Error read file \"%s\"",                                                         // 10
 	"File \"%s\" read partially",                                                     // 11
@@ -47,7 +46,7 @@ const char *ERRORS[] = {
 	"Cannot bind socket to port %d (errno %d)",                                       // 29
 	"Cannot listen for incoming connections (errno %d)",                              // 30
 	"Cannot accept connection (errno %d)",                                            // 31
-	"Cannot set TCP timeout (errno %d)",                                              // 32
+	"Cannot set timeout (errno %d)",                                                  // 32
 	"Too many table relations (%d)",                                                  // 33
 	"Cannot send to socket (errno %d)",                                               // 34
 	"Cannot close socket (errno %d)",                                                 // 35
@@ -77,7 +76,7 @@ const char *ERRORS[] = {
 	"Too many database connections (%d)",                                             // 59
 	"Invalid database connection index (\"%d\")",                                     // 60
 	"Cannot find database connection (id: \"%s\")",                                   // 61
-	"Database сonnection error: \n%s",                                                // 62
+	"Database connection error: \n%s",                                                // 62
 	"JSON array index out of range (index: %d, array size: %d)",                      // 63
 	"JSON value type (%d) is not STRING",                                             // 64
 	"Inappropriate connection key",                                                   // 65
@@ -99,6 +98,11 @@ const char *ERRORS[] = {
 	"Too many (%d) program arguments",                                                // 81
 	"Cannot find attribute \"name\" of HTML tag \"pghtml-var\"",                      // 82
 	"Unsupported HTML tag \"%s\"",                                                    // 83
+	"Cannot bind unix socket to path \"%s\" (errno %d)",                              // 84
+	"Cannot connect to unix socket \"%s\" (errno %d)",                                // 85
+	"Cannot open directory \"%s\" (errno %d)",                                        // 86
+	"Error lock file \"%s\" (errno %d)",                                              // 87
+	"Error create fork (errno %d)",                                                   // 88
 	"Unrecognized error"                                                              //
 };
 
@@ -115,20 +119,24 @@ unsigned char log_initialized = 0;
 time_t        log_time_started;
 thread_mutex  log_mutex;
 
+char log_program_name[128] = "<program_desc>";
 char log_program_desc[128] = "<program_desc>";
-char log_error_prefix[32] = "<ERROR_PREFIX>-";
 char log_file_name[STR_SIZE] = "";
 
-void log_set_program_name(char *program_desc, char *error_prefix) {
-	snprintf(log_program_desc, sizeof(log_program_desc), "%s",  program_desc);
-	snprintf(log_error_prefix, sizeof(log_error_prefix), "%s-", error_prefix);
+void log_set_program_info(char *name, char *desc) {
+	snprintf(log_program_name, sizeof(log_program_name), "%s", name);
+	snprintf(log_program_desc, sizeof(log_program_desc), "%s", desc);
+}
+
+int log_get_program_name(char *name, int name_size) {
+	return str_copy(name, name_size, log_program_name);
 }
 
 int log_get_header(char *header, int header_size) {
 	return str_format(header, header_size, "%s\nversion %s, %s %d bits\n", log_program_desc, VERSION, OS_NAME, sizeof(void*)*8);
 }
 
-void _log_initialize(char *log_file) {
+void log_initialize(char *log_file) {
 	clock_gettime(0, &log_time_started);
 	if (thread_mutex_init(&log_mutex, "log_mutex"))
 		log_exit_fatal();
@@ -172,7 +180,7 @@ void _log_println_text(log_level level, const char *text, int exit_code) {
 }
 
 void log_check_help(int argc, char *argv[], char *help) {
-	if (argc!=1  && strcmp(argv[1],"help") && strcmp(argv[1],"man") && strcmp(argv[1],"-help") && strcmp(argv[1],"--help")) return;
+	if (argc!=1  && strcmp(argv[1],"help") && strcmp(argv[1],"man") && strcmp(argv[1],"-h") && strcmp(argv[1],"-help") && strcmp(argv[1],"--help")) return;
 	char header[STR_SIZE];
 	if (!log_get_header(header, sizeof(header))) {
 		printf("%s\n%s", header, help);
@@ -204,7 +212,7 @@ int log_error(int error_code, ...) {
 	if (error_code<0 || error_code>=errors_size)
 		error_code=errors_size-1;
 	char text[LOG_TEXT_SIZE];
-	snprintf(text, sizeof(text), "%s%03d ", log_error_prefix, error_code);
+	snprintf(text, sizeof(text), "PGSUITE-%03d ", error_code);
 	int prefix_len = strlen(text);
     va_list args;
     va_start(args, &error_code);
@@ -222,7 +230,7 @@ int log_warn(int warning_code, ...) {
 	if ((warning_code-900)<0 || (warning_code-900)>=warnings_size)
 		warning_code=900+warnings_size-1;
 	char text[LOG_TEXT_SIZE];
-	snprintf(text, sizeof(text), "%s%03d ", log_error_prefix, warning_code);
+	snprintf(text, sizeof(text), "PGSUITE-%03d ", warning_code);
 	int prefix_len = strlen(text);
     va_list args;
     va_start(args, &warning_code);
@@ -232,17 +240,24 @@ int log_warn(int warning_code, ...) {
    	return -1;
 }
 
-void _log_trace(char *src_func, char *src_file, int src_line, const char* format, ...) {
+#ifdef TRACE
+
+void _log_trace(char *src_func, int src_line, const char* format, ...) {
 	char src[128];
-	snprintf(src, sizeof(src), "%s:%s:%d", src_func, src_file, src_line);
+	snprintf(src, sizeof(src), "%s:%d", src_func, src_line);
 	char text[LOG_TEXT_SIZE];
 	int prefix_len = snprintf(text, sizeof(text), "%-30s  ", src);
+	thread *thread_current;
+	if (threads_initialized && !thread_get_current(&thread_current))
+		prefix_len += snprintf(text+prefix_len, sizeof(text)-prefix_len, "%02d  ", thread_current->mem_allocated);
 	va_list args;
     va_start(args, format);
 	vsnprintf(text+prefix_len, sizeof(text)-prefix_len, format, args);
     va_end(args);
 	_log_println_text(LOG_LEVEL_TRACE, text, -1);
 }
+
+#endif
 
 void _log_set_file(char *log_file) {
 	if (!freopen(log_file, "a", stdout)) {

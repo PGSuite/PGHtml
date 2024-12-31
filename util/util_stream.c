@@ -1,15 +1,13 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-#include "utils.h"
+#include "util.h"
 
 #define STREAM_SIZE_INIT 100*1024
 #define STREAM_SIZE_STEP 10*1024*1024
 
 int stream_init(stream *stream) {
-	stream->data = malloc(STREAM_SIZE_INIT);
-	if (stream->data==NULL)
-		return log_error(9, STREAM_SIZE_INIT);
+	if(thread_mem_alloc(&stream->data, STREAM_SIZE_INIT)) return 1;
 	stream->size = STREAM_SIZE_INIT-1;
 	stream->data[0] = 0;
 	stream->len = 0;
@@ -18,9 +16,7 @@ int stream_init(stream *stream) {
 }
 
 void stream_free(stream *stream) {
-	if (stream->data==NULL)	log_error(51);
-	else free(stream->data);
-	stream->data = NULL;
+	thread_mem_free(&stream->data);
 	stream->size = -1;
 	stream->len = -1;
 }

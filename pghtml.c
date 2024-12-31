@@ -2,7 +2,7 @@
 #include <string.h>
 #include <limits.h>
 
-#include "util/utils.h"
+#include "util/util.h"
 #include "globals.h"
 
 extern void* admin_server_thread(void *args);
@@ -40,10 +40,25 @@ char HELP[] =
 	"  pghtml execute -hd /mysite -h server-db.mycompany.com -d sitedb -U admin -W 12345\n" \
     "  pghtml sync -hd /site/db -d sitedb\n";
 
+int admin_get_status_info(char *status_info, int status_info_size) {
+	if (log_get_header(status_info, status_info_size)) return 1;
+	if (globals_add_parameters(status_info, status_info_size)) return 1;
+	int uptime = log_get_uptime();
+	int uptime_s = uptime%60, uptime_m = (uptime/60)%60, uptime_h = (uptime/60/60)%24, uptime_d = uptime/60/60/24;
+	return str_add_format(status_info, status_info_size,
+		"\nStatus info"
+		"\n  uptime:  %3d %02d:%02d:%02d"
+		"\n  threads: %3d"
+		"\n\n",
+		uptime_d, uptime_h, uptime_m, uptime_s,
+		thread_get_count()
+	);
+}
+
 int main(int argc, char *argv[])
 {
 
-	log_set_program_name("PGHtml is HTML template engine using PostgreSQL", "PGHTML");
+	log_set_program_info("PGHtml", "PGHtml is HTML template engine using PostgreSQL");
 
 	log_check_help(argc, argv, HELP);
 
@@ -96,17 +111,6 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-
-	if (!strcmp(argv[1],"stop") || !strcmp(argv[1],"status")) {
-		admin_server_command(argc, argv);
-		exit(0);
-	}
-
-	if (strcmp(argv[1],"execute") && strcmp(argv[1],"sync")) {
-		log_error(39, argv[1]);
-		exit(3);
-	}
-
 	http_sync_interval = atoi(HTTP_SYNC_INTERVAL_DEFAULT);
 	http_port          = atoi(HTTP_PORT_DEFAULT);
 
@@ -149,7 +153,16 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	admin_port = http_port + ADMIN_PORT_OFFSET;
+	if (!strcmp(argv[1],"stop") || !strcmp(argv[1],"status")) {
+		admin_initialize(http_port, NULL);
+		admin_server_command(argc, argv);
+		exit(0);
+	}
+
+	if (strcmp(argv[1],"execute") && strcmp(argv[1],"sync")) {
+		log_error(39, argv[1]);
+		exit(3);
+	}
 
     if (db_host==NULL) db_host = tcp_host_addr[0]!=0 ? tcp_host_addr : "127.0.0.1";
     db_service_host = !strcmp(db_host,tcp_host_addr) ? "127.0.0.1" : db_host;
@@ -174,11 +187,14 @@ int main(int argc, char *argv[])
 	if (globals_add_parameters(header, sizeof(header))) exit(2);
 	log_info("%s", header);
 
-	utils_initialize(log_file);
+	thread_initialize();
+	log_initialize(log_file);
+	admin_initialize(http_port, admin_get_status_info);
+	pg_initialize();
 
 	if (tcp_startup()>0) log_exit_fatal();
 
-	if (thread_create(admin_server_thread, "ADMIN_SERVER", NULL))
+	if (thread_create(admin_server_thread, "ADMIN", NULL))
 		log_exit_fatal();
 
 	if (thread_create(file_maker_thread, "FILE_MAKER", NULL))

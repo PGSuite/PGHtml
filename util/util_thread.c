@@ -10,11 +10,12 @@
 
 #include <pthread.h>
 #include <sys/syscall.h>
+#include <sys/wait.h>
 #define  CURRENT_THREAD_ID syscall(__NR_gettid)
 
 #endif
 
-#include "utils.h"
+#include "util.h"
 
 #define THREADS_SIZE      1000
 #define THREADS_MAP_MASK  0xFFFF
@@ -77,7 +78,7 @@ void thread_mutex_unlock(thread_mutex *mutex) {
 		}
 }
 
-void _thread_initialize(char *error_prefix) {
+void thread_initialize() {
 	if (thread_mem_alloc(&threads, sizeof(thread)*THREADS_SIZE))
 		log_exit_fatal();
 	for(int i=0; i<THREADS_SIZE; i++)
@@ -95,7 +96,7 @@ void _thread_initialize(char *error_prefix) {
 	threads[0].last_error_text[0] = 0;
 	if(str_copy(threads[0].name, sizeof(threads[0].name), "MAIN"))
 		log_exit_fatal();
-	threads_initialized =1;
+	threads_initialized = 1;
 }
 
 int thread_create(void *function, char *name, tcp_socket socket_connection) {
@@ -126,6 +127,9 @@ int thread_create(void *function, char *name, tcp_socket socket_connection) {
 	threads[thread_index].last_error_code = 0;
 	threads[thread_index].last_error_text[0] = 0;
 	threads[thread_index].used = 2;
+	#ifdef TRACE
+		threads[thread_index].mem_allocated = 0;
+	#endif
 	return 0;
 }
 
@@ -199,9 +203,69 @@ int thread_get_count() {
 }
 
 int thread_mem_alloc(void **pointer, size_t size) {
-	log_trace("%d", size);
 	*pointer = malloc(size);
 	if (*pointer==NULL) return log_error(9, size);
-	log_trace("%p", *pointer);
+	#ifdef TRACE
+		thread_allocated_change(+1);
+		log_trace("%p", *pointer);
+	#endif
 	return 0;
 }
+
+void thread_mem_free(void **pointer) {
+	if (*pointer==NULL)	{ log_error(51); return; }
+	free(*pointer);
+	#ifdef TRACE
+		thread_allocated_change(-1);
+		log_trace("%p", *pointer);
+	#endif
+	*pointer = NULL;
+}
+
+#ifdef TRACE
+
+void thread_allocated_change(int mem_allocated_delta) {
+	thread *thread_current;
+	if (!threads_initialized || thread_get_current(&thread_current)) return;
+	thread_current->mem_allocated += mem_allocated_delta;
+}
+
+#endif
+
+void thread_mem_check_leak() {
+	#ifdef TRACE
+		thread *thread_current;
+		if (threads_initialized && !thread_get_current(&thread_current) && thread_current->mem_allocated)
+			log_error(4);
+	#endif
+}
+
+#ifndef _WIN32
+int thread_unix_execvp(char *argv[], int *exit_code, char *output, int output_size) {
+    int fork_pipe[2];
+    pipe(fork_pipe);
+	int fork_id=fork();
+	if (fork_id==-1)
+		return log_error(88, errno);
+    if (fork_id==0) {
+  	    dup2(fork_pipe[1], 1); // stdout
+  	    dup2(fork_pipe[1], 2); // stderr
+  	    close(fork_pipe[1]);
+  	    int fork_result =  execvp(argv[0], argv);
+  	    exit(fork_result);
+    }
+	char cmd[STR_SIZE] = "";
+	for(int i=0; argv[i]!=NULL; i++)
+		if (str_add(cmd, sizeof(cmd), i>0 ? " ":"", argv[i], NULL)) return 1;
+	log_info("executing command: %s", cmd);
+    wait(exit_code);
+	*exit_code = WEXITSTATUS(*exit_code);
+    close(fork_pipe[1]);
+    int output_len=0;
+    for(int read_len=0; (read_len=read(fork_pipe[0], output+output_len, output_size-output_len-1))!=0; output_len+=read_len);
+    output[output_len]=0;
+    log_info("%s", output);
+    log_info("command executed, exit code: %d, output length: %d", *exit_code, output_len);
+	return 0;
+}
+#endif

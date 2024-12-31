@@ -4,12 +4,12 @@
 #include <stddef.h>
 #include <sys/stat.h>
 
-#include "utils.h"
+#include "util.h"
 
 int file_read(char *path, stream *file_body) {
     FILE *file = fopen(path,"rb");
 	if(file==NULL)
-		return log_error(8, path);
+		return log_error(8, path, errno);
 	if (stream_init(file_body)) {
 		fclose(file);
 		return 1;
@@ -37,7 +37,7 @@ int file_read(char *path, stream *file_body) {
 int file_write(char *path, stream *file_body) {
     FILE * file = fopen(path,"wb");
 	if(file==NULL)
-		return log_error(8, path);
+		return log_error(8, path, errno);
 	int offset = 0;
 	while(offset<file_body->len) {
 		int len = fwrite((file_body->data)+offset, 1, file_body->len-offset, file);

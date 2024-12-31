@@ -1,7 +1,7 @@
 #include <stdarg.h>
 #include <strings.h>
 
-#include "utils.h"
+#include "util.h"
 
 int str_find(char *source, int pos, char *substr, int ignore_case) {
 	int substr_length = strlen(substr);

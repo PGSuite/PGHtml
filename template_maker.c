@@ -1,5 +1,5 @@
 #include "globals.h"
-#include "util/utils.h"
+#include "util/util.h"
 
 int template_maker_tag_skip_spaces(char *html, int *pos) {
 	int p = *pos;
@@ -87,16 +87,19 @@ int template_maker_process(PGconn *pg_conn, char *directory, char *filename) {
 		stream_free(&file);
 		return 1;
 	}
+	//
 	int res = template_maker_vars(&file, &vars);
 	stream_list_free(&vars);
 	if (res) {
 		stream_free(&file);
 		return 1;
 	}
+	//
 	if (template_maker_sql(pg_conn, &file)) {
 		stream_free(&file);
 		return 1;
 	}
+	//
 	int changed = file_write_if_changed(filepath_dest, &file);
 	stream_free(&file);
 	if (changed>0) return 1;
@@ -105,6 +108,7 @@ int template_maker_process(PGconn *pg_conn, char *directory, char *filename) {
 }
 
 int template_maker_include(stream *file, char *directory) {
+	log_trace("");
 	int pos_begin, pos_path, pos_end;
 	do  {
 		pos_begin = str_find(file->data, 0, "<" TAG_PGHTML_INCLUDE, 0);
@@ -130,10 +134,13 @@ int template_maker_include(stream *file, char *directory) {
 		if (file_read(include_path, &include_body))
 			return 1;
 		stream file_new;
-		if (stream_init(&file_new))
+		if (stream_init(&file_new)) {
+			stream_free(&include_body);
 			return 1;
+		}
 		if (pos_begin>0 && stream_add_substr(&file_new, file->data, 0, pos_begin-1)) {
 			stream_free(&file_new);
+			stream_free(&include_body);
 			return 1;
 		};
 		stream_list vars;
@@ -142,6 +149,7 @@ int template_maker_include(stream *file, char *directory) {
 			if (stream_list_add_str(&vars, attributes.keys[i], attributes.values[i])) {
 				stream_list_free(&vars);
 				stream_free(&file_new);
+				stream_free(&include_body);
 				return 1;
 			}
 		res = 0;
@@ -153,6 +161,7 @@ int template_maker_include(stream *file, char *directory) {
 			if (stream_add_char(&file_new, include_body.data[pos])) { res=1; break; }
 		}
 		stream_list_free(&vars);
+		stream_free(&include_body);
 		if (res) {
 			stream_free(&file_new);
 			return 1;
@@ -162,7 +171,9 @@ int template_maker_include(stream *file, char *directory) {
 			return 1;
 		};
 		stream_replace(file, &file_new);
+
 	} while(1);
+	log_trace("");
 	return 0;
 }
 

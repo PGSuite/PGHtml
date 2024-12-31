@@ -3,7 +3,7 @@
 #include <sys/stat.h>
 
 #include "globals.h"
-#include "util/utils.h"
+#include "util/util.h"
 
 void* file_maker_thread(void *args) {
 
@@ -16,11 +16,11 @@ void* file_maker_thread(void *args) {
 			continue;
 		file_maker_sync_dir(pg_conn);
 		pg_disconnect(&pg_conn);
+	    thread_mem_check_leak();
 	}
 
 	thread_end(args);
 	return 0;
-
 }
 
 int file_maker_sync_dir(PGconn *pg_conn) {
@@ -35,6 +35,7 @@ int file_maker_sync_subdir(PGconn *pg_conn, char *directory) {
 	char dir_path[STR_SIZE] = "";
 	if(str_add(dir_path, sizeof(dir_path), http_directory, FILE_SEPARATOR, directory, NULL)) return 1;
     DIR *dir = opendir(dir_path);
+    if (dir==NULL) return log_error(86, dir_path, errno);
     struct dirent *dir_ent;
     while ((dir_ent = readdir(dir)) != NULL) {
     	if (dir_ent->d_name[0]=='.') continue;
