@@ -1,7 +1,11 @@
 #include <stdio.h>
 #include <sys/types.h>
 
-#ifndef _WIN32
+#ifdef _WIN32
+
+#include <ws2tcpip.h>
+
+#else
 
 #include <sys/un.h>
 #include <sys/file.h>
@@ -22,14 +26,20 @@ int tcp_startup() {
 			return log_error(27, WSAGetLastError());
 		// log_info("Windows Socket Architecture (WSA) started, status: \"%s\"", wsa_data.szSystemStatus);
 	#endif
+	return 0;
+}
+
+int tcp_get_host_info() {
 	if (gethostname(tcp_host_name, sizeof(tcp_host_name))) return log_warn(903, tcp_errno);
 	struct hostent *host_ent;
 	host_ent = gethostbyname(tcp_host_name);
+	if (host_ent==NULL)  perror("");
 	if (host_ent==NULL) return log_warn(903, tcp_errno);
 	if (host_ent->h_addrtype==AF_INET && host_ent->h_addr!=NULL)
-		if (str_copy(tcp_host_addr, sizeof(tcp_host_addr), inet_ntoa (*(struct in_addr*)host_ent->h_addr))) return 1;
+	if (str_copy(tcp_host_addr, sizeof(tcp_host_addr), inet_ntoa (*(struct in_addr*)host_ent->h_addr))) return 1;
 	return 0;
 }
+
 
 int tcp_socket_create(tcp_socket *sock) {
 	*sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -138,16 +148,34 @@ int tcp_send(tcp_socket sock, char *data, int size) {
 }
 
 int tcp_socket_close(tcp_socket sock) {
+	if (sock==0)
+		return 0;
 	#ifdef _WIN32
 		if (closesocket(sock))
 	#else
 		if (close(sock))
 	#endif
 			return log_error(35, tcp_errno);
+	sock = 0;
 	return 0;
 }
 
-int tcp_host_info(char *host_name, int host_name_size, char *host_addr, int host_addr_size) {
+int tcp_addr_hostname(char *addr, int addr_size, const char *hostname) {
+	if (tcp_startup()) return 1;
+	struct addrinfo *addr_info = NULL;
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family   = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+	int eai_errno;
+	if (eai_errno=getaddrinfo(hostname, NULL, &hints, &addr_info))
+		return log_error(93, hostname, "eai_errno", eai_errno);
+	struct sockaddr_in *saddr_in = addr_info->ai_addr;
+	int res = inet_ntop(addr_info->ai_family, &(saddr_in->sin_addr), addr, addr_size)==NULL;
+	if (res) log_error(93, hostname, "errno", errno);
+	freeaddrinfo(addr_info);
+	return res;
 }
 
 int tcp_unix_socket_create(tcp_socket *sock) {
@@ -181,6 +209,7 @@ int tcp_unix_bind(tcp_socket sock, int port) {
 		if (tcp_bind(sock, TCP_WIN_UNIX_HOST_ADDR, port))
 			return 1;
 		log_info("binded to %s:%d", TCP_WIN_UNIX_HOST_ADDR, port);
+		return 0;
 	#else
 		struct sockaddr_un saddr;
 		char lock_path[STR_SIZE];

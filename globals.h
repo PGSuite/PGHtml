@@ -13,7 +13,7 @@
 #else
 
 #define HTTP_DIRECTORY_DEFAULT "/site"
-#define LOG_FILE_DEFAULT       "/var/log/pgorm/pghtml.log"
+#define LOG_FILE_DEFAULT       "/var/log/pgsuite/pghtml.log"
 
 #endif
 

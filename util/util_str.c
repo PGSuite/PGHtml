@@ -17,9 +17,15 @@ int str_find(char *source, int pos, char *substr, int ignore_case) {
 	return -1;
 }
 
+int str_find_char(char *source, int pos, char c) {
+	for(int i=pos; source[i]; i++)
+		if (source[i]==c) return i;
+	return -1;
+}
+
 int str_substr(char *dest, int dest_size, char *source, int pos_begin, int pos_end) {
 	if(pos_begin<0 || pos_end<0 || pos_begin>pos_end)
-		return log_error(54, "str_substr");
+		return log_error(54, __func__);
 	int len = pos_end-pos_begin+1;
 	if (len>=dest_size)
 		return log_error(5, dest_size, len+1);
@@ -30,8 +36,8 @@ int str_substr(char *dest, int dest_size, char *source, int pos_begin, int pos_e
 }
 
 int str_copy(char *dest, int dest_size, char *source) {
-	if(dest==NULL) return log_error(45, "dest", "str_copy");
-	if(source==NULL) return log_error(45, "source", "str_copy");
+	if(dest==NULL) return log_error(45, "dest", __func__);
+	if(source==NULL) return log_error(45, "source", __func__);
 	int source_len = strlen(source);
 	if (source_len>=dest_size)
 		return log_error(5, dest_size, source_len+1);
@@ -41,8 +47,8 @@ int str_copy(char *dest, int dest_size, char *source) {
 }
 
 int str_copy_more(char *dest, int dest_size, char *source) {
-	if(dest==NULL) return log_error(45, "dest", "str_copy_more");
-	if(source==NULL) return log_error(45, "source", "str_copy_more");
+	if(dest==NULL) return log_error(45, "dest", __func__);
+	if(source==NULL) return log_error(45, "source", __func__);
 	if (dest_size<10)
 		return log_error(5, dest_size, 10);
 	int source_len = strlen(source);
@@ -85,6 +91,20 @@ int str_add(char *dest, int dest_size, ...) {
     return 0;
 }
 
+int str_len_max(char *str, ...) {
+	int len_max = strlen(str);
+	va_list args;
+    va_start(args, &str);
+    while(1)  {
+    	char *s = va_arg(args, char *);
+    	if (s==NULL) break;
+    	int len = strlen(s);
+    	if (len>len_max) len_max=len;
+    }
+    va_end(args);
+    return len_max;
+}
+
 int str_format(char *dest, int dest_size, char *format, ...) {
 	va_list args;
     va_start(args, &format);
@@ -102,11 +122,9 @@ int str_add_format(char *dest, int dest_size, char *format, ...) {
 	int len = vsnprintf(str, sizeof(str), format, args);
 	va_end(args);
 	if (len<0) return log_error(54, format);
-	if (len!=strlen(str)) return log_error( 5, sizeof(str), len+1);
+	if (len!=strlen(str)) return log_error(5, sizeof(str), len+1);
     return str_add(dest, dest_size, str, NULL);
 }
-
-
 
 int str_insert_char(char *str, int str_size, int pos, char c) {
 	int len = strlen(str);
@@ -124,11 +142,31 @@ int str_delete_char(char *str, int pos) {
 	return 0;
 }
 
+int str_replace(char *str, int str_size, char *substr_old, char *substr_new) {
+	for(int pos=0; (pos=str_find(str, pos, substr_old, 0))!=-1;) {
+		int substr_old_len = strlen(substr_old);
+		int substr_new_len = strlen(substr_new);
+		int str_len_old = strlen(str);
+		int str_len_new = str_len_old+substr_new_len-substr_old_len;
+		if ( (str_len_new+1)>str_size )
+			return log_error(5, str_size, str_len_new+1);
+		if (substr_old_len<substr_new_len)
+			for(int i=str_len_old; i>=pos+substr_old_len; i--)
+				str[i+substr_new_len-substr_old_len]=str[i];
+		if (substr_old_len>substr_new_len)
+			for(int i=pos+substr_old_len; i<=str_len_old; i++)
+				str[i+substr_new_len-substr_old_len]=str[i];
+		for(int i=0; i<substr_new_len; i++)
+			str[pos+i]=substr_new[i];
+		pos += substr_new_len-substr_old_len+1;
+	}
+	return 0;
+}
+
 void str_replace_char(char *str, char c_old, char c_new) {
 	for(int i=0; str[i]; i++)
 		if (str[i]==c_old) str[i]=c_new;
 }
-
 
 int str_escaped_char(char *c) {
 	if (*c=='"' || *c=='\\')  return -1;
@@ -183,6 +221,20 @@ int str_unescaped(char *str) {
 	return 0;
 }
 
+void str_trim(char *str) {
+	int len = strlen(str);
+	int pos_left;
+	for (pos_left=0; str[pos_left] && str[pos_left]==' '; pos_left++);
+	int pos_right;
+	for (pos_right=len-1; pos_right>pos_left && str[pos_right]==' '; pos_right--);
+	int len_new = pos_right-pos_left+1;
+	if (len==len_new) return;
+	for(int i=0; i<len_new; i++)
+		str[i]=str[i+pos_left];
+	str[len_new]=0;
+}
+
+/*
 int str_rtrim(char *dest, int dest_size, int len) {
 	if (len>=dest_size)
 		return log_error(5, dest_size, len+1);
@@ -193,6 +245,7 @@ int str_rtrim(char *dest, int dest_size, int len) {
 	dest[len]=0;
     return 0;
 }
+*/
 
 void str_map_clear(str_map *map) {
 	map->len = 0;
@@ -272,10 +325,4 @@ int str_utf8_next(char *str, int *i) {
 	*i = *i+len;
 	return 0;
 }
-
-void str_len_max(int *len_max, char *str) {
-	int len = strlen(str);
-	if (len>*len_max) *len_max = len;
-}
-
 

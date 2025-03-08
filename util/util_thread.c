@@ -241,31 +241,88 @@ void thread_mem_check_leak() {
 }
 
 #ifndef _WIN32
-int thread_unix_execvp(char *argv[], int *exit_code, char *output, int output_size) {
-    int fork_pipe[2];
-    pipe(fork_pipe);
-	int fork_id=fork();
-	if (fork_id==-1)
-		return log_error(88, errno);
-    if (fork_id==0) {
-  	    dup2(fork_pipe[1], 1); // stdout
-  	    dup2(fork_pipe[1], 2); // stderr
-  	    close(fork_pipe[1]);
-  	    int fork_result =  execvp(argv[0], argv);
-  	    exit(fork_result);
+int thread_unix_command_execute(char *command, char *output, int output_size, int log_sucess) {
+	if (output==NULL) {
+		char output_tmp[STR_SIZE];
+		output = output_tmp; output_size = sizeof(output_tmp);
+	}
+	output[0]=0;
+	if (log_sucess) log_info("executing command:\n%s", command);
+	char commands[STR_SIZE];
+	char *argv[20];
+	int argc=0;
+	argv[argc] = &commands[0];
+	for(int i=0;;) {
+		if (command[i]!='"')
+			for(;command[i] && command[i]!=' ';i++) commands[i] = command[i];
+		else {
+			commands[i] = command[i];
+			for(i++;command[i] && !((i<2 || command[i-2]!='\\') && command[i-1]=='"' && command[i]==' ');i++) commands[i] = command[i];
+		}
+		commands[i]=0;
+		if (!command[i]) break;
+		if (argc==sizeof(argv)/sizeof(argv[0]-2)) return log_error(89);
+		argv[++argc] = &commands[++i];
+	}
+	argv[++argc] = NULL;
+	for(int i=0;i<argc;i++) {
+		if (argv[i][0]!='"') continue;
+		if (str_delete_char(argv[i], 0)) return 1;
+		for(int p=0; argv[i][p]; p++) {
+			if (argv[i][p]=='"' && !argv[i][p+1]) { argv[i][p]=0; break; }
+			if (argv[i][p]=='\\' && str_delete_char(argv[i], p)) return 1;
+		}
+	}
+    int fork_pipe[2] = {0,0};
+    if (pipe(fork_pipe)) {
+    	log_error(91, errno);
+    	goto error;
+	}
+	int fork_pid=fork();
+	if (fork_pid==-1) {
+		log_error(88, errno);
+		goto error;
+	}
+    if (fork_pid==0) {
+  	    if (dup2(fork_pipe[1], 1)==-1 || dup2(fork_pipe[1], 2)==-1) {
+  	    	fprintf(stderr, "Error duplicate fork pipe (errno %d)\n", errno);
+  	    	exit(2);
+  	    }
+  	    exit(execvp(argv[0], argv));
     }
-	char cmd[STR_SIZE] = "";
-	for(int i=0; argv[i]!=NULL; i++)
-		if (str_add(cmd, sizeof(cmd), i>0 ? " ":"", argv[i], NULL)) return 1;
-	log_info("executing command: %s", cmd);
-    wait(exit_code);
-	*exit_code = WEXITSTATUS(*exit_code);
-    close(fork_pipe[1]);
+    int fork_status;
+    if (waitpid(fork_pid, &fork_status, 0)!=fork_pid) {
+    	log_error(90, errno);
+    	goto error;
+	}
+    int fork_errno = WEXITSTATUS(fork_status);
+    if (close(fork_pipe[1])) {
+    	log_error(92, errno);
+    	goto error;
+    }
+    fork_pipe[1] = 0;
     int output_len=0;
-    for(int read_len=0; (read_len=read(fork_pipe[0], output+output_len, output_size-output_len-1))!=0; output_len+=read_len);
-    output[output_len]=0;
-    log_info("%s", output);
-    log_info("command executed, exit code: %d, output length: %d", *exit_code, output_len);
-	return 0;
+    for(int read_len; (read_len=read(fork_pipe[0], output+output_len, output_size-output_len-1))!=0; output_len+=read_len);
+	output[output_len]=0;
+    if (close(fork_pipe[0])) {
+    	log_error(92, errno);
+    	goto error;
+    }
+    fork_pipe[0] = 0;
+    if (fork_errno) {
+		char warn_command[STR_SIZE] = "";
+		if(!log_sucess && str_format(warn_command, sizeof(warn_command), "command:\n%s\n", command)) return 1;
+   		log_warn(905, fork_errno, warn_command, output);
+   		return 2;
+    } else {
+    	if (log_sucess)
+    		log_info("output:\n%s\ncommand executed successfully", output);
+    	return 0;
+    }
+error:
+	if (fork_pipe[0]) close(fork_pipe[0]);
+	if (fork_pipe[1]) close(fork_pipe[1]);
+	return 1;
 }
+
 #endif

@@ -11,7 +11,7 @@ void* file_maker_thread(void *args) {
 
 	PGconn *pg_conn;
 
-	for(;1;sleep(http_sync_interval)) {
+	for(;;sleep(http_sync_interval)) {
 		if (pg_connect(&pg_conn, db_service_uri))
 			continue;
 		file_maker_sync_dir(pg_conn);

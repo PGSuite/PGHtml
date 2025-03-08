@@ -5,7 +5,6 @@
 #include "util/util.h"
 #include "globals.h"
 
-extern void* admin_server_thread(void *args);
 extern void* file_maker_thread(void *args);
 
 char HELP[] =
@@ -33,83 +32,27 @@ char HELP[] =
 	"  -W PASSWORD        password of user for service (if nessesary)\n" \
 	"\n" \
 	"Logging options:\n" \
-	"  -l  FILE           log file\n" \
+	"  -l FILE           log file\n" \
 	"\n" \
 	"Examples:\n" \
 	"  pghtml start -d sitedb -l /var/log/pghtml.log\n" \
 	"  pghtml execute -hd /mysite -h server-db.mycompany.com -d sitedb -U admin -W 12345\n" \
     "  pghtml sync -hd /site/db -d sitedb\n";
 
-int admin_get_status_info(char *status_info, int status_info_size) {
+int admin_status(char *status_info, int status_info_size) {
 	if (log_get_header(status_info, status_info_size)) return 1;
 	if (globals_add_parameters(status_info, status_info_size)) return 1;
-	int uptime = log_get_uptime();
-	int uptime_s = uptime%60, uptime_m = (uptime/60)%60, uptime_h = (uptime/60/60)%24, uptime_d = uptime/60/60/24;
-	return str_add_format(status_info, status_info_size,
-		"\nStatus info"
-		"\n  uptime:  %3d %02d:%02d:%02d"
-		"\n  threads: %3d"
-		"\n\n",
-		uptime_d, uptime_h, uptime_m, uptime_s,
-		thread_get_count()
-	);
+	return
+		str_add_format(status_info, status_info_size, "\nStatus info\n  uptime:  ") ||
+		time_interval_str_add(status_info, status_info_size, log_get_uptime()) ||
+		str_add_format(status_info, status_info_size, "\n  threads: %d \n\n", thread_get_count());
 }
 
 int main(int argc, char *argv[])
 {
 
-	log_set_program_info("PGHtml", "PGHtml is HTML template engine using PostgreSQL");
-
+	log_set_program_info("PGHtml", "PGHtml - HTML template engine using PostgreSQL");
 	log_check_help(argc, argv, HELP);
-
-	if (!strcmp(argv[1],"start")) {
-
-		char *args[20];
-		int args_count=0;
-		int status;
-		int error_code;
-		unsigned int pid;
-		if (sizeof(args)/sizeof(char *)+4<argc) {
-			log_error(81, argc);
-			exit(3);
-		}
-		args[args_count++]=argv[0];
-		args[args_count++]="execute";
-		int log_set = 0;
-		for(int i=2; i<argc; i++) {
-			if (!strcmp(argv[i],"-l")) log_set = 1;
-			args[args_count++]=argv[i];
-		}
-		if (!log_set) {
-			args[args_count++]="-l";
-			args[args_count++]=LOG_FILE_DEFAULT;
-		}
-		args[args_count++]=NULL;
-		char command[32*1024] = "";
-		for(int i=0; i<args_count-1; i++)
-			if (str_add(command, sizeof(command), i>0 ? " " : "", args[i], NULL)) exit(3);
-
-		#ifdef _WIN32
-
-			STARTUPINFO cif;
-			ZeroMemory(&cif,sizeof(STARTUPINFO));
-			PROCESS_INFORMATION pi;
-			status = !CreateProcess(argv[0], command, NULL,NULL,FALSE,NULL,NULL,NULL,&cif,&pi);
-			error_code =  GetLastError();
-			pid = pi.hProcess;
-
-		#else
-
-			status = posix_spawn(&pid, args[0], NULL, NULL, args, NULL);
-
-		#endif
-
-		if (status) {
-			log_error(36, error_code, command);
-			exit(3);
-		}
-		return 0;
-	}
 
 	http_sync_interval = atoi(HTTP_SYNC_INTERVAL_DEFAULT);
 	http_port          = atoi(HTTP_PORT_DEFAULT);
@@ -153,11 +96,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (!strcmp(argv[1],"stop") || !strcmp(argv[1],"status")) {
-		admin_initialize(http_port, NULL);
-		admin_server_command(argc, argv);
-		exit(0);
-	}
+	admin_check_command(argc, argv, http_port, (char *[]) {"status", NULL}, (admin_command_function_t *[]) {admin_status, NULL});
 
 	if (strcmp(argv[1],"execute") && strcmp(argv[1],"sync")) {
 		log_error(39, argv[1]);
@@ -170,11 +109,8 @@ int main(int argc, char *argv[])
 	if (pg_uri_build(db_service_uri, sizeof(db_service_uri), db_service_host, db_port, db_name, db_service_user, db_service_password) )
     	exit(3);
 
-	char header[STR_SIZE];
-	if (log_get_header(header, sizeof(header))) exit(2);
-
 	if (!strcmp(argv[1],"sync")) {
-		log_info("%s", header);
+		log_print_header();
 		PGconn *pg_conn;
 		int res = pg_connect(&pg_conn, db_service_uri);
 		if (!res) {
@@ -184,20 +120,22 @@ int main(int argc, char *argv[])
 		exit(res);
 	}
 
-	if (globals_add_parameters(header, sizeof(header))) exit(2);
-	log_info("%s", header);
+	char caption[STR_SIZE];
+	if (log_get_header(caption, sizeof(caption))) exit(2);
+	if (globals_add_parameters(caption, sizeof(caption))) exit(2);
 
 	thread_initialize();
-	log_initialize(log_file);
-	admin_initialize(http_port, admin_get_status_info);
+	log_initialize2(log_file, 14);
+	log_info("%s", caption);
 	pg_initialize();
 
-	if (tcp_startup()>0) log_exit_fatal();
+	if (tcp_startup() || tcp_get_host_info()>0) log_exit_fatal();
 
-	if (thread_create(admin_server_thread, "ADMIN", NULL))
-		log_exit_fatal();
-
-	if (thread_create(file_maker_thread, "FILE_MAKER", NULL))
+	if (
+		log_thread_create(7, 14)                             ||
+		admin_thread_create()                                ||
+		thread_create(file_maker_thread, "FILE_MAKER", NULL)
+	)
 		log_exit_fatal();
 
     while(1) sleep(UINT_MAX);

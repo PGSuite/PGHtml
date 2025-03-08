@@ -1,7 +1,10 @@
 #ifndef UTIL_H_
 #define UTIL_H_
 
-#define VERSION "24.4.14"
+#include <limits.h>
+#include <string.h>
+
+#define VERSION "25.1.2"
 
 // #define TRACE 1
 
@@ -18,7 +21,6 @@
 #define PATH_SEPARATOR  ":"
 #define OS_NAME         "linux"
 #endif
-
 
 // log ---------------------------------------------------------------------------------------------
 
@@ -117,8 +119,6 @@ extern unsigned char threads_initialized;
 
 // str ---------------------------------------------------------------------------------------------
 
-#include <string.h>
-
 #define STR_SIZE 1024
 
 #define STR_COLLECTION_SIZE        30
@@ -139,11 +139,10 @@ typedef struct
 	char values[STR_COLLECTION_SIZE][STR_COLLECTION_VALUE_SIZE];
 } str_list;
 
-/*
-	1. thread_initialize();
-	2. log_initialize(log_file);
-	3. admin_initialize(admin_port, admin_function_get_status_info);
-	4. pg_initialize();
-*/
+// admin --------------------------------------------------------------------------------------------
+
+#define ADMIN_INFO_SIZE 10*1024
+
+typedef int admin_command_function_t(char *info, int info_size);
 
 #endif /* UTIL_H_ */
