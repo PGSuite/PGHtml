@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <semaphore.h>
 
 #ifdef _WIN32
 
@@ -17,27 +18,25 @@
 
 #include "util.h"
 
-#define THREADS_SIZE      1000
-#define THREADS_MAP_MASK  0xFFFF
+thread_mutex_t thread_create_mutex;
+sem_t          thread_create_sem;
+int            thread_name_len_max;
+unsigned char  threads_initialized = 0;
 
-thread *threads;
+__thread thread_info_t thread_info;
 
-int *threads_map;
-
-unsigned char threads_initialized = 0;
-thread_mutex  threads_mutex;
-
-int thread_mutex_init(thread_mutex *mutex, char *mutex_name) {
+void thread_mutex_init(thread_mutex_t *mutex, char *mutex_name) {
 	#ifdef _WIN32
 		*mutex = CreateMutex(NULL, FALSE, NULL);
-		if (*mutex!=NULL) return 0;
+		if (*mutex!=NULL) return;
 	#else
-		if (!pthread_mutex_init(mutex, NULL)) return 0;
+		if (!pthread_mutex_init(mutex, NULL)) return;
 	#endif
-	return log_error(48, mutex_name);
+	log_error(48, mutex_name);
+	log_exit_fatal();
 }
 
-void thread_mutex_destroy(thread_mutex *mutex) {
+void thread_mutex_destroy(thread_mutex_t *mutex) {
 	#ifdef _WIN32
 		CloseHandle(*mutex);
 	#else
@@ -45,7 +44,7 @@ void thread_mutex_destroy(thread_mutex *mutex) {
 	#endif
 }
 
-void thread_mutex_lock(thread_mutex *mutex) {
+void thread_mutex_lock(thread_mutex_t *mutex) {
 	#ifdef _WIN32
 		if (WaitForSingleObject(*mutex, -1)) {
 	#else
@@ -56,7 +55,7 @@ void thread_mutex_lock(thread_mutex *mutex) {
 		}
 }
 
-int thread_mutex_try_lock(thread_mutex *mutex) {
+int thread_mutex_try_lock(thread_mutex_t *mutex) {
 	#ifdef _WIN32
 		if (WaitForSingleObject(*mutex, 0)) {
 	#else
@@ -67,7 +66,7 @@ int thread_mutex_try_lock(thread_mutex *mutex) {
 		return 0;
 }
 
-void thread_mutex_unlock(thread_mutex *mutex) {
+void thread_mutex_unlock(thread_mutex_t *mutex) {
 	#ifdef _WIN32
 		if (!ReleaseMutex(*mutex)) {
 	#else
@@ -78,98 +77,68 @@ void thread_mutex_unlock(thread_mutex *mutex) {
 		}
 }
 
-void thread_initialize() {
-	if (thread_mem_alloc(&threads, sizeof(thread)*THREADS_SIZE))
+void thread_semaphore_init(sem_t *sem, char *sem_name) {
+	if (sem_init(sem, 0, 0)) {
+		log_error(95, sem_name);
 		log_exit_fatal();
-	for(int i=0; i<THREADS_SIZE; i++)
-		threads[i].used = 0;
-	if (thread_mem_alloc(&threads_map, sizeof(int)*(THREADS_MAP_MASK+1)))
+	}
+}
+
+void thread_semaphore_wait(sem_t *sem) {
+	if (sem_wait(sem)) {
+		log_error(96);
 		log_exit_fatal();
-	for(int i=0; i<=THREADS_MAP_MASK; i++)
-		threads_map[0] = -1;
-	if (thread_mutex_init(&threads_mutex, "threads_mutex"))
+	}
+}
+
+void thread_semaphore_post(sem_t *sem) {
+	if (sem_post(sem)) {
+		log_error(97);
 		log_exit_fatal();
-	threads[0].used = 2;
-	threads[0].id =	CURRENT_THREAD_ID;
-	threads_map[threads[0].id&THREADS_MAP_MASK] = 0;
-	threads[0].last_error_code = 0;
-	threads[0].last_error_text[0] = 0;
-	if(str_copy(threads[0].name, sizeof(threads[0].name), "MAIN"))
+	}
+}
+
+void thread_initialize(int name_len_max) {
+	thread_mutex_init(&thread_create_mutex, "thread_create_mutex");
+	thread_semaphore_init(&thread_create_sem, "thread_create_sem");
+	if(str_copy(thread_info.name, sizeof(thread_info.name), "MAIN"))
 		log_exit_fatal();
+	thread_name_len_max = name_len_max;
 	threads_initialized = 1;
 }
 
-int thread_create(void *function, char *name, tcp_socket socket_connection) {
-	int thread_index;
-	thread_mutex_lock(&threads_mutex);
-	while(1) {
-		for(thread_index=0; thread_index<THREADS_SIZE && threads[thread_index].used; thread_index++);
-		if (thread_index<THREADS_SIZE) break;
-		log_info("too many running threads, waiting");
-		sleep(1);
-	};
-	threads[thread_index].used = 1;
-	thread_mutex_unlock(&threads_mutex);
-	if (str_copy(threads[thread_index].name, sizeof(threads[0].name), name)) {
-		threads[thread_index].used = 0;
-		return 1;
-	}
-	threads[thread_index].socket_connection = socket_connection;
+int thread_create(void *function(thread_params_t *params), thread_params_t *params) {
+	thread_mutex_lock(&thread_create_mutex);
 	#ifdef _WIN32
-		threads[thread_index].sys_id = CreateThread(NULL, 0, function, thread_index, 0, NULL);
-		if (threads[thread_index].sys_id == NULL) {
+		if (CreateThread(NULL, 0, function, params, 0, NULL)==NULL) {
 	#else
-		if (pthread_create(&threads[thread_index].sys_id, NULL, function, thread_index) != 0) {
+		pthread_t th;
+		if (pthread_create(&th, NULL, function, params)) {
 	#endif
-			threads[thread_index].used = 0;
-			return log_error(26, name);
-		}
-	threads[thread_index].last_error_code = 0;
-	threads[thread_index].last_error_text[0] = 0;
-	threads[thread_index].used = 2;
-	#ifdef TRACE
-		threads[thread_index].mem_allocated = 0;
-	#endif
+		thread_mutex_unlock(&thread_create_mutex);
+		return log_error(26, errno);
+	}
+	thread_semaphore_wait(&thread_create_sem);
+	thread_mutex_unlock(&thread_create_mutex);
 	return 0;
 }
 
-tcp_socket thread_get_socket_connection(void *thread_args) {
-	int thread_index = thread_args;
-	return threads[thread_index].socket_connection;
+void thread_begin(char *name) {
+	str_copy_more(thread_info.name, sizeof(thread_info.name), name);
+	thread_semaphore_post(&thread_create_sem);
+	log_info("thread started, thread_id: %u", CURRENT_THREAD_ID);
 }
 
-void thread_begin(void *thread_args) {
-	int thread_index = thread_args;
-	threads[thread_index].id = CURRENT_THREAD_ID;
-	threads_map[threads[thread_index].id&THREADS_MAP_MASK] = thread_index;
-	log_info("thread started, thread_id: %u", threads[thread_index].id);
+void thread_end() {
+	log_info("thread \"%s\" finished", thread_info.name);
 }
 
-void thread_end(void *thread_args) {
-	int thread_index = thread_args;
-	log_info("thread \"%s\" finished", threads[thread_index].name);
-	threads[thread_index].used = 3;
-	threads_map[threads[thread_index].id&THREADS_MAP_MASK] = -1;
-	threads[thread_index].id = 0;
-	threads[thread_index].used = 0;
+int thread_add_name(char *dest, int dest_size) {
+	if (!threads_initialized) return 0;
+	return str_add_format(dest, dest_size, "%-*s", thread_name_len_max, thread_info.name);
 }
 
-int thread_get_current(thread **thread_current) {
-	*thread_current = NULL;
-	if (!threads_initialized) return -1;
-	unsigned int thread_id = CURRENT_THREAD_ID;
-	int thread_index = threads_map[thread_id&THREADS_MAP_MASK];
-	if (0<=thread_index && thread_index<THREADS_SIZE && threads[thread_index].used==2 && threads[thread_index].id==thread_id) {
-		*thread_current = &threads[thread_index];
-		return 0;
-	}
-	for(int i=0; i<THREADS_SIZE; i++)
-		if (threads[i].used==2 && threads[i].id==thread_id) {
-			*thread_current = &threads[i];
-			return 0;
-		}
-	return -1;
-}
+/*
 
 int thread_set_last_erorr(int error_code, char *error_text) {
 	if (!threads_initialized) return 1;
@@ -201,6 +170,8 @@ int thread_get_count() {
 		if (threads[i].used==2) count++;
 	return count;
 }
+
+*/
 
 int thread_mem_alloc(void **pointer, size_t size) {
 	*pointer = malloc(size);
@@ -242,23 +213,22 @@ void thread_mem_check_leak() {
 
 #ifndef _WIN32
 int thread_unix_command_execute(char *command, char *output, int output_size, int log_sucess) {
+	char output_tmp[STR_SIZE];
 	if (output==NULL) {
-		char output_tmp[STR_SIZE];
 		output = output_tmp; output_size = sizeof(output_tmp);
 	}
 	output[0]=0;
 	if (log_sucess) log_info("executing command:\n%s", command);
 	char commands[STR_SIZE];
+	if (str_copy(commands, sizeof(commands), command)) return 1;
 	char *argv[20];
 	int argc=0;
 	argv[argc] = &commands[0];
 	for(int i=0;;) {
 		if (command[i]!='"')
-			for(;command[i] && command[i]!=' ';i++) commands[i] = command[i];
-		else {
-			commands[i] = command[i];
-			for(i++;command[i] && !((i<2 || command[i-2]!='\\') && command[i-1]=='"' && command[i]==' ');i++) commands[i] = command[i];
-		}
+			for(;command[i] && command[i]!=' ';i++);
+		else
+			for(i++;command[i] && !((i<2 || command[i-2]!='\\') && command[i-1]=='"' && command[i]==' ');i++);
 		commands[i]=0;
 		if (!command[i]) break;
 		if (argc==sizeof(argv)/sizeof(argv[0]-2)) return log_error(89);

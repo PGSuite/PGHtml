@@ -19,7 +19,7 @@ typedef struct
 {
 	int index;
 	unsigned char assigned;
-	thread_mutex mutex;
+	thread_mutex_t mutex;
 	char activity_id[40];
 	char key[8*(8+1)];
 	PGconn *conn;

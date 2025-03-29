@@ -5,9 +5,9 @@
 #include "globals.h"
 #include "util/util.h"
 
-void* file_maker_thread(void *args) {
+void* file_maker_thread(thread_params_t *params) {
 
-	thread_begin(args);
+	thread_begin("FILE_MAKER");
 
 	PGconn *pg_conn;
 
@@ -19,7 +19,7 @@ void* file_maker_thread(void *args) {
 	    thread_mem_check_leak();
 	}
 
-	thread_end(args);
+	thread_end();
 	return 0;
 }
 

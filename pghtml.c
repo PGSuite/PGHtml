@@ -44,8 +44,8 @@ int admin_status(char *status_info, int status_info_size) {
 	if (globals_add_parameters(status_info, status_info_size)) return 1;
 	return
 		str_add_format(status_info, status_info_size, "\nStatus info\n  uptime:  ") ||
-		time_interval_str_add(status_info, status_info_size, log_get_uptime()) ||
-		str_add_format(status_info, status_info_size, "\n  threads: %d \n\n", thread_get_count());
+		time_interval_str_add(status_info, status_info_size, log_get_uptime());
+		// str_add_format(status_info, status_info_size, "\n  threads: %d \n\n", thread_get_count());
 }
 
 int main(int argc, char *argv[])
@@ -124,17 +124,17 @@ int main(int argc, char *argv[])
 	if (log_get_header(caption, sizeof(caption))) exit(2);
 	if (globals_add_parameters(caption, sizeof(caption))) exit(2);
 
-	thread_initialize();
-	log_initialize2(log_file, 14);
+	thread_initialize(14);
+	log_initialize(log_file);
 	log_info("%s", caption);
 	pg_initialize();
 
 	if (tcp_startup() || tcp_get_host_info()>0) log_exit_fatal();
 
 	if (
-		log_thread_create(7, 14)                             ||
-		admin_thread_create()                                ||
-		thread_create(file_maker_thread, "FILE_MAKER", NULL)
+		log_thread_create(7, 14)               ||
+		admin_thread_create()                  ||
+		thread_create(file_maker_thread, NULL)
 	)
 		log_exit_fatal();
 

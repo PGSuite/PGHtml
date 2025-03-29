@@ -4,7 +4,7 @@
 #include <limits.h>
 #include <string.h>
 
-#define VERSION "25.1.2"
+#define VERSION "25.1.3"
 
 // #define TRACE 1
 
@@ -88,32 +88,26 @@ typedef struct
 #ifdef _WIN32
 
 #include <processthreadsapi.h>
-#define thread_sys_id HANDLE
-#define thread_mutex  HANDLE
+#define thread_sys_id  HANDLE
+#define thread_mutex_t HANDLE
 
 #else
 
 #include <pthread.h>
-#define thread_sys_id pthread_t
-#define thread_mutex  pthread_mutex_t
+#define thread_sys_id  pthread_t
+#define thread_mutex_t pthread_mutex_t
 
 #endif
 
 #define THREAD_NAME_SIZE  20
 
-typedef struct
-{
-	unsigned char used;
-	thread_sys_id sys_id;
-	unsigned int id;
+typedef struct {
 	char name[THREAD_NAME_SIZE];
+} thread_info_t;
+
+typedef struct {
 	tcp_socket socket_connection;
-	int last_error_code;
-	char last_error_text[LOG_TEXT_SIZE];
-    #ifdef TRACE
-		int mem_allocated;
-    #endif
-} thread;
+} thread_params_t;
 
 extern unsigned char threads_initialized;
 

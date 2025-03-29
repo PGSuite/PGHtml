@@ -12,8 +12,7 @@ void pg_initialize(char *error_prefix) {
 	if (thread_mem_alloc(&pg_connections, sizeof(pg_connection)*PG_CONNECTIONS_SIZE))
 		log_exit_fatal();
 	for(int i=0; i<PG_CONNECTIONS_SIZE; i++) {
-		if (thread_mutex_init(&pg_connections[i].mutex, "pg_connections_mutex"))
-			log_exit_fatal();
+		thread_mutex_init(&pg_connections[i].mutex, "pg_connections_mutex");
 		pg_connections[i].index          = i;
 		pg_connections[i].assigned       = 0;
 		pg_connections[i].activity_id[0] = 0;

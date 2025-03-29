@@ -12,8 +12,8 @@ int                      admin_port;
 char                     *(*admin_commands_name)[];
 admin_command_function_t *(*admin_commands_function)[];
 
-void* _admin_thread(void *args) {
-	thread_begin(args);
+void* _admin_thread(thread_params_t *params) {
+	thread_begin("ADMINISTRATION");
     tcp_socket socket_listen;
 	if (tcp_unix_socket_create(&socket_listen)) log_exit_fatal();
 	if (tcp_unix_bind(socket_listen, admin_port)) log_exit_fatal();
@@ -50,12 +50,12 @@ void* _admin_thread(void *args) {
 		}
 		tcp_socket_close(socket_connection);
 	}
-	thread_end(args);
+	thread_end();
 	return 0;
 }
 
 int admin_thread_create() {
-	return thread_create(_admin_thread, "ADMINISTRATION", NULL);
+	return thread_create(_admin_thread, NULL);
 }
 
 void admin_check_command(int argc, char *argv[], int application_port, const char *commands_name[], const admin_command_function_t *commands_function[])

@@ -40,7 +40,7 @@ const char *ERRORS[] = {
 	"Too many directories or files (max %d)",                                         // 23
 	"Map size (%d) too small (key=\"%s\",value=\"%s\")",                              // 24
 	"Error (errno %d) open log file \"%s\" for %s",                                   // 25
-	"Cannot create thread \"%s\"",                                                    // 26
+	"Cannot create thread (errno %d)",                                                // 26
 	"Cannot start WSA (errno %d)",                                                    // 27
 	"Cannot create socket (errno %d)",                                                // 28
 	"Cannot bind socket to port %d (errno %d)",                                       // 29
@@ -109,6 +109,9 @@ const char *ERRORS[] = {
 	"Error close pipe (errno %d)",                                                    // 92
 	"Cannot get IP address for hostname \"%s\" (%s %d)",                              // 93
 	"Cannot rename file \"%s\" to \"%s\" (errno %d)",                                 // 94
+	"Cannot initialize semaphore \"%s\"",                                             // 95
+	"Cannot post semaphore",                                                          // 96
+	"Cannot wait semaphore",                                                          // 97
 	"Unrecognized error"                                                              //
 };
 
@@ -124,11 +127,10 @@ const char *WARNINGS[] = {
 	"Unrecognized warning"                                                            //
 };
 
-unsigned char log_initialized    = 0;
-unsigned char log_thread_started = 0;
-time_t        log_time_started;
-int           log_thread_name_len;
-thread_mutex  log_mutex;
+unsigned char  log_initialized    = 0;
+unsigned char  log_thread_started = 0;
+time_t         log_time_started;
+thread_mutex_t log_mutex;
 
 char log_program_name[32]  = "<program_name>";
 char log_program_desc[128] = "<program_desc>";
@@ -159,14 +161,11 @@ void log_print_header() {
 	log_info("%s", header);
 }
 
-
-void log_initialize2(char *file_name, int thread_name_len) {
+void log_initialize(char *file_name) {
 	clock_gettime(0, &log_time_started);
-	if (thread_mutex_init(&log_mutex, "log_mutex"))
-		log_exit_fatal();
+	thread_mutex_init(&log_mutex, "log_mutex");
 	if (file_name!=NULL && file_name[0])
 		_log_set_file_name(file_name);
-	log_thread_name_len = thread_name_len;
 	log_initialized = 1;
 }
 
@@ -183,20 +182,16 @@ void _log_println_text(log_level level, const char *text, int lock) {
 		fflush(stream);
 		return;
 	}
-	char prefix[128];
-	int prefix_len;
+	char prefix[128] = "";
 	if (log_file_name[0]) {
 		struct timespec ts;
 		clock_gettime(0, &ts);
-		prefix_len = strftime(prefix,sizeof(prefix),"%Y-%m-%d %H:%M:%S",localtime(&ts.tv_sec));
-		prefix_len += snprintf(prefix+prefix_len, sizeof(prefix)-prefix_len, ".%03ld ", ts.tv_nsec/1000000L);
-	} else {
-		prefix[0]  = 0;
-		prefix_len = 0;
+		strftime(prefix,sizeof(prefix),"%Y-%m-%d %H:%M:%S",localtime(&ts.tv_sec));
+		str_add_format(prefix, sizeof(prefix), ".%03ld ", ts.tv_nsec/1000000L);
 	}
-	thread *thread_current;
-	thread_get_current(&thread_current);
-	snprintf(prefix+prefix_len, sizeof(prefix)-prefix_len, "%-5s %-*s  ", LOG_LEVEL_NAMES[level], log_thread_name_len, thread_current!=NULL ? thread_current->name : "");
+	str_add_format(prefix, sizeof(prefix), "%-5s", LOG_LEVEL_NAMES[level]);
+	thread_add_name(prefix, sizeof(prefix));
+	str_add(prefix, sizeof(prefix), "  ", NULL);
 	if (lock) thread_mutex_lock(&log_mutex);
 	for(char *p=text,*p_next;;p=p_next) {
 		p_next = strchr(p,'\n');
@@ -256,7 +251,7 @@ int log_error(int error_code, ...) {
 	vsnprintf(text+prefix_len, sizeof(text)-prefix_len, ERRORS[error_code], args);
     va_end(args);
 	_log_println_text(LOG_LEVEL_ERROR, text, 1);
-	thread_set_last_erorr(error_code, text);
+	// thread_set_last_erorr(error_code, text);
    	return 1;
 }
 
@@ -422,18 +417,17 @@ final:
 	tcp_socket_close(sock);
 }
 
-void* _log_thread(void *args) {
-	thread_begin(args);
+void* _log_thread(thread_params_t *params) {
+	thread_begin("LOGGER");
 	log_thread_started = 1;
-	for(int i=1;;i=++i%60) {
-		sleep(10);
+	for(int i=1;;sleep(5),i=++i%600) {
 		fflush(stdout);
 		fflush(stderr);
 		if (i) continue;
 		_log_file_switch();
 		_log_check_update();
 	}
-	thread_end(args);
+	thread_end();
 	return 0;
 }
 
@@ -441,5 +435,5 @@ int log_thread_create(int storage_days, int check_updates) {
 	log_storage_days       = storage_days;
 	log_check_updates      = check_updates;
 	log_check_updates_time = 0;
-	return thread_create(_log_thread, "LOGGER", NULL);
+	return thread_create(_log_thread, NULL);
 }
