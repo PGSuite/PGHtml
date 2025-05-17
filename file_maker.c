@@ -35,7 +35,7 @@ int file_maker_sync_subdir(PGconn *pg_conn, char *directory) {
 	char dir_path[STR_SIZE] = "";
 	if(str_add(dir_path, sizeof(dir_path), http_directory, FILE_SEPARATOR, directory, NULL)) return 1;
     DIR *dir = opendir(dir_path);
-    if (dir==NULL) return log_error(86, dir_path, errno);
+    if (dir==NULL) return log_error_errno(1086, dir_path);
     struct dirent *dir_ent;
     while ((dir_ent = readdir(dir)) != NULL) {
     	if (dir_ent->d_name[0]=='.') continue;

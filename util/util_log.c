@@ -10,127 +10,137 @@
 #define MSG_EXIT_FATAL "exit due to fatal error"
 #define MSG_EXIT_STOP  "exit due to stopping"
 
-typedef enum {LOG_LEVEL_FATAL, LOG_LEVEL_ERROR, LOG_LEVEL_WARN, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG, LOG_LEVEL_TRACE} log_level;
 const char *LOG_LEVEL_NAMES[] = {"FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"};
 
-const char *ERRORS[] = {
-	"No error",                                                                       //  0
-	"Any error (default error code)",                                                 //  1
-	"No value for option \"%s\"",                                                     //  2
-	"Non-existent option \"%s\"",                                                     //  3
-	"Memory leak detected",                                                           //  4
-	"Destination string too small (%d bytes, %d required)",                           //  5
-	"Too many attributes for tag \"%s\"",                                             //  6
-	"Error parsing HTML tag for position %d",                                         //  7
-	"Error open file \"%s\" (errno %d)",                                              //  8
-	"Cannot allocate memory (%d bytes)",                                              //  9
-	"Error read file \"%s\"",                                                         // 10
-	"File \"%s\" read partially",                                                     // 11
-	"Error write file \"%s\"",                                                        // 12
-	"File \"%s\" written partially",                                                  // 13
-	"Error close file \"%s\"",                                                        // 14
-	"Invalid UTF8 first byte (position: %d, text start: \"%.20s\")",                  // 15
-	"Connection denied for user \"%s\"",                                              // 16
-	"Error parsing HTML tag: not found char '%c' for position %d",                    // 17
-	"Error parsing HTML element: not found \"%s\" for position %d",                   // 18
-	"SQL error (%s), query start:\n%.80s\n%s",                                        // 19
-	"List size (%d) too small (value=\"%s\")",                                        // 20
-	"Collection value size (%d) too small for string \"%s...\"",                      // 21
-	"File extension \"%s\" must start with \"pg\"",                                   // 22
-	"Too many directories or files (max %d)",                                         // 23
-	"Map size (%d) too small (key=\"%s\",value=\"%s\")",                              // 24
-	"Error (errno %d) open log file \"%s\" for %s",                                   // 25
-	"Cannot create thread (errno %d)",                                                // 26
-	"Cannot start WSA (errno %d)",                                                    // 27
-	"Cannot create socket (errno %d)",                                                // 28
-	"Cannot bind socket to port %d (errno %d)",                                       // 29
-	"Cannot listen for incoming connections (errno %d)",                              // 30
-	"Cannot accept connection (errno %d)",                                            // 31
-	"Cannot set timeout (errno %d)",                                                  // 32
-	"Too many table relations (%d)",                                                  // 33
-	"Cannot send to socket (errno %d)",                                               // 34
-	"Cannot close socket (errno %d)",                                                 // 35
-	"Cannot create process (errno %d), command:\n%s",                                 // 36
-	"Cannot lock mutex",                                                              // 37
-	"Cannot unlock mutex",                                                            // 38
-	"Incorrect execution command \"%s\"",                                             // 39
-	"SQL query executed without returning data (query start: \"%.20s\")",             // 40
-	"Not option \"%s\"",                                                              // 41
-	"Incorrect port number \"%s\"",                                                   // 42
-	"Cannot connect to %s:%d (errno %d)",                                             // 43
-	"Process not stopped (administration socket not closed)",                         // 44
-	"Parameter \"%s\" is null (%s)",                                                  // 45
-	"Too many (%d) program arguments",                                                // 46
-	"Cannot create process (errno %d), command:\n%s",                                 // 47
-	"Cannot initialize mutex \"%s\"",                                                 // 48
-	"Cannot create directory \"%s\" (errno %d)",                                      // 49
-	"Cannot get stat for path \"%s\" (errno %d)",                                     // 50
-	"Stream data is null (memory not allocated)",                                     // 51
-	"Unrecognized command (\"%s\")",                                                  // 52
-	"Invalid UTF8 next byte (position: %d, offset: %d, text start: \"%.20s\")",       // 53
-	"Incorrect parameters (%s)",                                                      // 54
-	"Cannot parse JSON (error: \"%s\", start position: %d, text: \"%.20s\")",         // 55
-	"JSON is null (memory not allocated)",                                            // 56
-	"Cannot find JSON value (value type: %d, path: \"%s\", start text: \"%.20s\")",   // 57
-	LOG_ERROR_NOT_FOUND_CURRENT_THREAD_TEXT,                                          // 58
-	"Too many database connections (%d)",                                             // 59
-	"Invalid database connection index (\"%d\")",                                     // 60
-	"Cannot find database connection (id: \"%s\")",                                   // 61
-	"Database connection error: \n%s",                                                // 62
-	"JSON array index out of range (index: %d, array size: %d)",                      // 63
-	"JSON value type (%d) is not STRING",                                             // 64
-	"Inappropriate connection key",                                                   // 65
-	"SQL query returned empty data (query start: \"%.20s\")",                         // 66
-	"Invalid request path (\"%s\")",                                                  // 67
-	"Too many table columns (%d)",                                                    // 68
-	"Too many indexes (%d)",                                                          // 69
-	"Too many index columns (%d)",                                                    // 70
-	"Incorrect connection state",                                                     // 71
-	"Cannot parse interval from \"%s\"",                                              // 72
-	"Cannot convert date value \"%.*s\" into ISO8601 string",                         // 73
-	"Cannot convert value \"%s\" into interval",                                      // 74
-	"Too many columns in result query (%d)",                                          // 75
-	"Undefined value function for column \"%s\" (type oid: %d)",                      // 76
-	"SQL query returned more than one row (query start: \"%.20s\")",                  // 77
-	"Cannot remove file \"%s\" (errno %d)",                                           // 78
-	"Cannot remove dir \"%s\" (errno %d)",                                            // 79
-	"Too long program arguments",                                                     // 80
-	"Too many (%d) program arguments",                                                // 81
-	"Cannot find attribute \"name\" of HTML tag \"pghtml-var\"",                      // 82
-	"Unsupported HTML tag \"%s\"",                                                    // 83
-	"Cannot bind unix socket to path \"%s\" (errno %d)",                              // 84
-	"Cannot connect to unix socket \"%s\" (errno %d)",                                // 85
-	"Cannot open directory \"%s\" (errno %d)",                                        // 86
-	"Error lock file \"%s\" (errno %d)",                                              // 87
-	"Error create fork (errno %d)",                                                   // 88
-	"Too many command arguments",                                                     // 89
-	"Fork not finished (errno %d)",                                                   // 90
-	"Error create pipe (errno %d)",                                                   // 91
-	"Error close pipe (errno %d)",                                                    // 92
-	"Cannot get IP address for hostname \"%s\" (%s %d)",                              // 93
-	"Cannot rename file \"%s\" to \"%s\" (errno %d)",                                 // 94
-	"Cannot initialize semaphore \"%s\"",                                             // 95
-	"Cannot post semaphore",                                                          // 96
-	"Cannot wait semaphore",                                                          // 97
+const char *LOG_ERRORS[] = {
+	"No error",                                                                       // 1000
+	"Any error (default error code)",                                                 // 1001
+	"No value for option \"%s\"",                                                     // 1002
+	"Non-existent option \"%s\"",                                                     // 1003
+	"Memory leak detected",                                                           // 1004
+	"Destination string too small (%d bytes, %d required)",                           // 1005
+	"Too many attributes for tag \"%s\"",                                             // 1006
+	"Error parsing HTML tag for position %d",                                         // 1007
+	"Error open file \"%s\" (${errno})",                                              // 1008
+	"Cannot allocate memory (%d bytes)",                                              // 1009
+	"Error read file \"%s\" (${errno})",                                              // 1010
+	"File \"%s\" read partially",                                                     // 1011
+	"Error write file \"%s\" (${errno})",                                             // 1012
+	"File \"%s\" written partially",                                                  // 1013
+	"Error close file \"%s\" (${errno})",                                             // 1014
+	"Invalid UTF8 first byte (position: %d, text start: \"%.20s\")",                  // 1015
+	"Connection denied for user \"%s\"",                                              // 1016
+	"Error parsing HTML tag: not found char '%c' for position %d",                    // 1017
+	"Error parsing HTML element: not found \"%s\" for position %d",                   // 1018
+	"SQL error (%s), query start:\n%.80s\n%s",                                        // 1019
+	"List size (%d) too small (value=\"%s\")",                                        // 1020
+	"Collection value size (%d) too small for string \"%s...\"",                      // 1021
+	"File extension \"%s\" must start with \"pg\"",                                   // 1022
+	"Too many directories or files (max %d)",                                         // 1023
+	"Map size (%d) too small (key=\"%s\",value=\"%s\")",                              // 1024
+	"Error open log file \"%s\" for %s (${errno})",                                   // 1025
+	"Cannot create thread (error %d)",                                                // 1026
+	"Cannot start WSA (${errno})",                                                    // 1027
+	"Cannot create socket (${errno})",                                                // 1028
+	"Cannot bind socket to port %d (${errno})",                                       // 1029
+	"Cannot listen for incoming connections (${errno})",                              // 1030
+	"Cannot accept connection (${errno})",                                            // 1031
+	"Cannot set timeout (${errno})",                                                  // 1032
+	"Too many table relations (%d)",                                                  // 1033
+	"Cannot send to socket (${errno})",                                               // 1034
+	"Cannot close socket (${errno})",                                                 // 1035
+	"Cannot create process, command:\n%s (${errno})",                                 // 1036
+	"Cannot lock mutex",                                                              // 1037
+	"Cannot unlock mutex",                                                            // 1038
+	"Incorrect execution command \"%s\"",                                             // 1039
+	"SQL query executed without returning data (query start: \"%.20s\")",             // 1040
+	"Not option \"%s\"",                                                              // 1041
+	"Incorrect port number \"%s\"",                                                   // 1042
+	"Cannot connect to %s:%d (${errno})",                                             // 1043
+	"Process not stopped (administration socket not closed)",                         // 1044
+	"Parameter \"%s\" is null",                                                       // 1045
+	"Too many (%d) program arguments",                                                // 1046
+	"Cannot create process (errno %d), command:\n%s",                                 // 1047
+	"Cannot initialize mutex \"%s\"",                                                 // 1048
+	"Cannot create directory \"%s\" (${errno})",                                      // 1049
+	"Cannot get stat for path \"%s\" (${errno})",                                     // 1050
+	"Stream data is null (memory not allocated)",                                     // 1051
+	"Unrecognized command (\"%s\")",                                                  // 1052
+	"Invalid UTF8 next byte (position: %d, offset: %d, text start: \"%.20s\")",       // 1053
+	"Incorrect parameters",                                                           // 1054
+	"Cannot parse JSON (error: \"%s\", start position: %d, text: \"%.20s\")",         // 1055
+	"JSON is null (memory not allocated)",                                            // 1056
+	"Cannot find JSON value (value type: %d, path: \"%s\", start text: \"%.20s\")",   // 1057
+	LOG_ERROR_NOT_FOUND_CURRENT_THREAD_TEXT,                                          // 1058
+	"Too many database connections (%d)",                                             // 1059
+	"Invalid database connection index (\"%d\")",                                     // 1060
+	"Cannot find database connection (id: \"%s\")",                                   // 1061
+	"Database connection error: \n%s",                                                // 1062
+	"JSON array index out of range (index: %d, array size: %d)",                      // 1063
+	"JSON value type (%d) is not STRING",                                             // 1064
+	"Inappropriate connection key",                                                   // 1065
+	"SQL query returned empty data (query start: \"%.20s\")",                         // 1066
+	"Invalid request path (\"%s\")",                                                  // 1067
+	"Too many table columns (%d)",                                                    // 1068
+	"Too many indexes (%d)",                                                          // 1069
+	"Too many index columns (%d)",                                                    // 1070
+	"Incorrect connection state",                                                     // 1071
+	"Cannot parse interval from \"%s\"",                                              // 1072
+	"Cannot convert date value \"%.*s\" into ISO8601 string",                         // 1073
+	"Cannot convert value \"%s\" into interval",                                      // 1074
+	"Too many columns in result query (%d)",                                          // 1075
+	"Undefined value function for column \"%s\" (type oid: %d)",                      // 1076
+	"SQL query returned more than one row (query start: \"%.20s\")",                  // 1077
+	"Cannot remove file \"%s\" (${errno})",                                           // 1078
+	"Cannot remove dir \"%s\" (${errno})",                                            // 1079
+	"Too long program arguments",                                                     // 1080
+	"Too many (%d) program arguments",                                                // 1081
+	"Cannot find attribute \"name\" of HTML tag \"pghtml-var\"",                      // 1082
+	"Unsupported HTML tag \"%s\"",                                                    // 1083
+	"Cannot bind unix socket to path \"%s\" (${errno})",                              // 1084
+	"Cannot connect to unix socket \"%s\" (${errno})",                                // 1085
+	"Cannot open directory \"%s\" (${errno})",                                        // 1086
+	"Error lock file \"%s\" (${errno})",                                              // 1087
+	"Error create fork (${errno})",                                                   // 1088
+	"Too many command arguments",                                                     // 1089
+	"Fork not finished (${errno})",                                                   // 1090
+	"Error create pipe (${errno})",                                                   // 1091
+	"Error close pipe (${errno})",                                                    // 1092
+	"Cannot get IP address for hostname \"%s\" (ai_errno %d,%s)",                     // 1093
+	"Cannot rename file \"%s\" to \"%s\" (${errno})",                                 // 1094
+	"Cannot initialize semaphore \"%s\"",                                             // 1095
+	"Cannot post semaphore",                                                          // 1096
+	"Cannot wait semaphore",                                                          // 1097
+	"Stream list is full",                                                            // 1098
+	"Error convert IP address to text (${errno})",                                    // 1099
+	"Parameter \"%s\" has invalid value \"%s\"",                                      // 1100
 	"Unrecognized error"                                                              //
 };
 
-const char *WARNINGS[] = {
-	"No warning",                                                                     // 900
-	"No data to recieve from socket (timeout %d sec)",                                // 901
-	"Error on recieved data from socket (errno %d)",                                  // 902
-	"Unable to get host information (errno %d)",                                      // 903
-	"User database connections are made via localhost/127.0.0.1 (may be insecure)",   // 904
-	"OS command executed with error (errno: %d)\n%soutput:\n%s",                      // 905
-	"Action \"%s\" executed with error",                                              // 906
-	"Update recommended (current version: %s, latest version: %s)",                   // 907
+#define LOG_ERRORS_SIZE   sizeof(LOG_ERRORS)/sizeof(LOG_ERRORS[0])
+#define LOG_ERRORS_OFFSET 1000
+
+const char *LOG_WARNINGS[] = {
+	"No warning",                                                                     // 9000
+	"No data to recieve from socket (timeout %d sec)",                                // 9001
+	"Error on recieved data from socket (${errno})",                                  // 9002
+	"Unable to get host information (${errno})",                                      // 9003
+	"User database connections are made via localhost/127.0.0.1 (may be insecure)",   // 9004
+	"OS command executed with error (${errno})\n%soutput:\n%s",                       // 9005
+	"Action \"%s\" executed with error",                                              // 9006
+	"Update recommended (current version: %s, latest version: %s)",                   // 9007
 	"Unrecognized warning"                                                            //
 };
+
+#define LOG_WARNINGS_SIZE   sizeof(LOG_WARNINGS)/sizeof(LOG_WARNINGS[0])
+#define LOG_WARNINGS_OFFSET 9000
+
 
 unsigned char  log_initialized    = 0;
 unsigned char  log_thread_started = 0;
 time_t         log_time_started;
-thread_mutex_t log_mutex;
+thread_mutex_t log_println_mutex;
+thread_mutex_t log_strerror_mutex;
 
 char log_program_name[32]  = "<program_name>";
 char log_program_desc[128] = "<program_desc>";
@@ -163,7 +173,8 @@ void log_print_header() {
 
 void log_initialize(char *file_name) {
 	clock_gettime(0, &log_time_started);
-	thread_mutex_init(&log_mutex, "log_mutex");
+	thread_mutex_init(&log_println_mutex);
+	thread_mutex_init(&log_strerror_mutex);
 	if (file_name!=NULL && file_name[0])
 		_log_set_file_name(file_name);
 	log_initialized = 1;
@@ -189,10 +200,10 @@ void _log_println_text(log_level level, const char *text, int lock) {
 		strftime(prefix,sizeof(prefix),"%Y-%m-%d %H:%M:%S",localtime(&ts.tv_sec));
 		str_add_format(prefix, sizeof(prefix), ".%03ld ", ts.tv_nsec/1000000L);
 	}
-	str_add_format(prefix, sizeof(prefix), "%-5s", LOG_LEVEL_NAMES[level]);
+	str_add_format(prefix, sizeof(prefix), "%-5s ", LOG_LEVEL_NAMES[level]);
 	thread_add_name(prefix, sizeof(prefix));
 	str_add(prefix, sizeof(prefix), "  ", NULL);
-	if (lock) thread_mutex_lock(&log_mutex);
+	if (lock) thread_mutex_lock(&log_println_mutex);
 	for(char *p=text,*p_next;;p=p_next) {
 		p_next = strchr(p,'\n');
 		fputs(prefix, stream);
@@ -203,7 +214,7 @@ void _log_println_text(log_level level, const char *text, int lock) {
 		fwrite(p, 1, ++p_next-p, stream);
 	};
 	putc('\n', stream);
-	if (lock) thread_mutex_unlock(&log_mutex);
+	if (lock) thread_mutex_unlock(&log_println_mutex);
 	if (!log_thread_started) fflush(stream);
 }
 
@@ -217,13 +228,13 @@ void log_check_help(int argc, char *argv[], char *help) {
 }
 
 void log_exit_fatal() {
-	thread_mutex_lock(&log_mutex);
+	thread_mutex_lock(&log_println_mutex);
 	_log_println_text(LOG_LEVEL_FATAL, MSG_EXIT_FATAL, 0);
 	exit(2);
 }
 
 void log_exit_stop() {
-	thread_mutex_lock(&log_mutex);
+	thread_mutex_lock(&log_println_mutex);
 	_log_println_text(LOG_LEVEL_INFO, MSG_EXIT_STOP, 0);
 	exit(0);
 }
@@ -237,51 +248,48 @@ void log_info(const char* format, ...) {
 	_log_println_text(LOG_LEVEL_INFO, text, 1);
 }
 
-// result:
-//   1 - always
-int log_error(int error_code, ...) {
-	int errors_size = sizeof(ERRORS)/sizeof(ERRORS[0]);
-	if (error_code<0 || error_code>=errors_size)
-		error_code=errors_size-1;
-	char text[LOG_TEXT_SIZE];
-	snprintf(text, sizeof(text), "PGSUITE-%03d ", error_code);
-	int prefix_len = strlen(text);
-    va_list args;
-    va_start(args, &error_code);
-	vsnprintf(text+prefix_len, sizeof(text)-prefix_len, ERRORS[error_code], args);
-    va_end(args);
-	_log_println_text(LOG_LEVEL_ERROR, text, 1);
-	// thread_set_last_erorr(error_code, text);
-   	return 1;
+char* _log_src_file_base(char *src_file) {
+	for(int i=strlen(src_file); i>=0; i--)
+		if (src_file[i]=='/' || src_file[i]=='\\' || src_file[i]=='%') return src_file+i+1;
+	return src_file;
 }
 
-// result:
-//   -1 - always
-int log_warn(int warning_code, ...) {
-	int warnings_size = sizeof(WARNINGS)/sizeof(WARNINGS[0]);
-	if ((warning_code-900)<0 || (warning_code-900)>=warnings_size)
-		warning_code=900+warnings_size-1;
+int _log_code(char *src_file, char *src_func, int src_line, log_level level, int code, char *errno_name, int errno_value, ...) {
+	char *format =	level==LOG_LEVEL_ERROR ?
+		LOG_ERRORS  [LOG_ERRORS_OFFSET  <=code && code<LOG_ERRORS_OFFSET  +LOG_ERRORS_SIZE   ? code-LOG_ERRORS_OFFSET   : LOG_ERRORS_SIZE-1  ]:
+		LOG_WARNINGS[LOG_WARNINGS_OFFSET<=code && code<LOG_WARNINGS_OFFSET+LOG_WARNINGS_SIZE ? code-LOG_WARNINGS_OFFSET : LOG_WARNINGS_SIZE-1];
+	int pos_errno = str_find(format, 0, "${errno}", 0);
+	char format_errno[512];
+	if (pos_errno>=0) {
+		int len = snprintf(format_errno, sizeof(format_errno), "%.*s%s %d,", pos_errno, format, errno_name==NULL ? "errno" : errno_name, errno_value);
+		if (errno_name==NULL && errno_value) {
+			if (log_initialized) thread_mutex_lock(&log_strerror_mutex); // strerror_r not found
+			char *errno_str = strerror(errno_value);
+			for(int i=0;errno_str[i] && len<sizeof(format_errno)-10;i++) {
+				format_errno[len++]=errno_str[i];
+				if (errno_str[i]=='%') format_errno[len++]=errno_str[i];
+			}
+			if (log_initialized) thread_mutex_unlock(&log_strerror_mutex);
+			format_errno[len]=0;
+		}
+		snprintf(format_errno+len, sizeof(format_errno)-len, "%s", format+pos_errno+8);
+	}
 	char text[LOG_TEXT_SIZE];
-	snprintf(text, sizeof(text), "PGSUITE-%03d ", warning_code);
-	int prefix_len = strlen(text);
+	int len = snprintf(text, sizeof(text), "PGSUITE-%d [%s:%s:%d] ", code, _log_src_file_base(src_file), src_func, src_line);
     va_list args;
-    va_start(args, &warning_code);
-	vsnprintf(text+prefix_len, sizeof(text)-prefix_len, WARNINGS[warning_code-900], args);
+    va_start(args, &errno_value);
+	vsnprintf(text+len, sizeof(text)-len, pos_errno>=0 ? format_errno : format, args);
     va_end(args);
-	_log_println_text(LOG_LEVEL_WARN, text, 1);
-   	return -1;
+	_log_println_text(level, text, 1);
+   	return level==LOG_LEVEL_ERROR ? 1 : -1;
 }
-
 #ifdef TRACE
 
-void _log_trace(char *src_func, int src_line, const char* format, ...) {
+void _log_trace(char *src_file, char *src_func, int src_line, const char* format, ...) {
 	char src[128];
-	snprintf(src, sizeof(src), "%s:%d", src_func, src_line);
+	snprintf(src, sizeof(src), "[%s:%s:%d]", _log_src_file_base(src_file), src_func, src_line);
 	char text[LOG_TEXT_SIZE];
-	int prefix_len = snprintf(text, sizeof(text), "%-30s  ", src);
-	thread *thread_current;
-	if (threads_initialized && !thread_get_current(&thread_current))
-		prefix_len += snprintf(text+prefix_len, sizeof(text)-prefix_len, "%02d  ", thread_current->mem_allocated);
+	int prefix_len = snprintf(text, sizeof(text), "%-40s  %02d  ", src, thread_mem_allocated_get());
 	va_list args;
     va_start(args, format);
 	vsnprintf(text+prefix_len, sizeof(text)-prefix_len, format, args);
@@ -291,18 +299,20 @@ void _log_trace(char *src_func, int src_line, const char* format, ...) {
 
 #endif
 
+const char *LOG_ERROR_OPEN_FILE = "Error (errno %d) open log file \"%s\" for %s";
+
 void _log_set_file_name(char *file_name) {
 	log_info("stdout and stderr is redirected to file %s", file_name);
 	if (!freopen(file_name, "a", stdout)) {
 		log_info("");
-		log_error(25, errno, file_name, "stdout");
+		log_error_errno(1025, errno, file_name, "stdout");
 		exit(2);
 	}
 	fseek(stdout, 0, SEEK_END);
 	if (ftello(stdout))
 		fprintf(stdout, "\n");
 	if (!freopen(file_name, "a", stderr)) {
-		log_info(ERRORS[25], errno, file_name, "stderr");
+		log_info(LOG_ERROR_OPEN_FILE, errno, file_name, "stderr");
 		exit(2);
 	}
 	if (
@@ -319,7 +329,7 @@ void _log_file_switch() {
 	if (strcmp(log_file_date, date)>=0) return;
 	char log_file_name_old[PATH_MAX] = "";
 	if (str_add(log_file_name_old, sizeof(log_file_name_old), log_file_name, ".", log_file_date, NULL)) return;
-	thread_mutex_lock(&log_mutex);
+	thread_mutex_lock(&log_println_mutex);
 	_log_println_text(LOG_LEVEL_INFO, "switching log file", 0);
 	#ifdef _WIN32
 		fclose(stdout);
@@ -337,13 +347,13 @@ void _log_file_switch() {
 			stderr_result = freopen(log_file_name, "w", stderr)==NULL; stderr_errno = errno;
 		}
 	#endif
-	thread_mutex_unlock(&log_mutex);
+	thread_mutex_unlock(&log_println_mutex);
 	if (!rename_result)
 		log_info("log file switched, previous renamed to \"%s\"", log_file_name_old);
 	else
-		log_error(94, log_file_name, log_file_name_old, rename_errno);
-	if (stdout_result) log_error(25,         stdout_errno, log_file_name, "stdout");
-	if (stderr_result) log_info (ERRORS[25], stderr_errno, log_file_name, "stderr");
+		log_error_errno(1094, rename_errno, log_file_name, log_file_name_old);
+	if (stdout_result) log_error_errno(1025, stderr_errno, log_file_name, "stdout");
+	if (stderr_result) log_info(LOG_ERROR_OPEN_FILE, stderr_errno, log_file_name, "stderr");
 	if(str_copy(log_file_date, sizeof(log_file_date), date)) log_exit_fatal();
 	if (!rename_result)
 		_log_file_remove_obsolete(time);
@@ -360,7 +370,7 @@ void _log_file_remove_obsolete(time_t time) {
 	if (str_add(log_file_name_last, sizeof(log_file_name_last), log_file_name, ".", log_file_date_last, NULL)) return;
 	int log_file_name_last_len = strlen(log_file_name_last);
 	DIR *dir = opendir(dir_path);
-	if (dir==NULL) { log_error(86, dir_path, errno); return; }
+	if (dir==NULL) { log_error_errno(1086, dir_path); return; }
 	struct dirent *dir_ent;
 	while ((dir_ent = readdir(dir)) != NULL) {
 		char file_name[1024] = "";
@@ -397,7 +407,7 @@ void _log_check_update() {
 	do {
 		int recv_len = recv(sock, response+response_len, sizeof(response)-response_len-1, 0);
 		if (recv_len<=0) {
-			log_warn(902, tcp_errno);
+			log_warn_errno_tcp(9002, tcp_errno);
 			goto final;
 		}
 		response_len += recv_len;
@@ -412,7 +422,7 @@ void _log_check_update() {
 	if (!strcmp(version_latest, VERSION))
 		log_info("no update required, latest version (%s) is used", version_latest);
 	else
-		log_warn(907, VERSION, version_latest);
+		log_warn(9007, VERSION, version_latest);
 final:
 	tcp_socket_close(sock);
 }

@@ -35,7 +35,7 @@ void* _admin_thread(thread_params_t *params) {
 		}
 		for(int i=0;;i++) {
 			if ((*admin_commands_name)[i]==NULL) {
-				log_error(39, command);
+				log_error(1039, command);
 				break;
 			}
 			if (!strcmp(command,(*admin_commands_name)[i])) {
@@ -64,7 +64,6 @@ void admin_check_command(int argc, char *argv[], int application_port, const cha
 	if (!strcmp(argv[1],"start")) {
 		argv[1] = "execute";
 		int status;
-		int error_code;
 		unsigned int pid;
 		char command[4*1024] = "";
 		for(int i=0; i<argc; i++)
@@ -74,13 +73,12 @@ void admin_check_command(int argc, char *argv[], int application_port, const cha
 			ZeroMemory(&cif,sizeof(STARTUPINFO));
 			PROCESS_INFORMATION pi;
 			status = !CreateProcess(argv[0], command, NULL,NULL,FALSE,NULL,NULL,NULL,&cif,&pi);
-			error_code =  GetLastError();
 			pid = pi.hProcess;
 		#else
 			status = posix_spawn(&pid, argv[0], NULL, NULL, argv, NULL);
 		#endif
 		if (status) {
-			log_error(36, error_code, command);
+			log_error_errno(1036, errno, command);
 			exit(3);
 		}
 		exit(0);
@@ -128,7 +126,7 @@ void admin_check_command(int argc, char *argv[], int application_port, const cha
 			fflush(stdout);
 		}
 		printf("\n");
-		log_error(44);
+		log_error(1044);
 		exit(2);
     }
 

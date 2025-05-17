@@ -23,23 +23,22 @@ int tcp_startup() {
     #ifdef _WIN32
 		WSADATA wsa_data;
 		if (WSAStartup(MAKEWORD(2,2), &wsa_data))
-			return log_error(27, WSAGetLastError());
+			return log_error_errno_tcp(1027, WSAGetLastError());
 		// log_info("Windows Socket Architecture (WSA) started, status: \"%s\"", wsa_data.szSystemStatus);
 	#endif
 	return 0;
 }
 
 int tcp_get_host_info() {
-	if (gethostname(tcp_host_name, sizeof(tcp_host_name))) return log_warn(903, tcp_errno);
+	if (gethostname(tcp_host_name, sizeof(tcp_host_name))) return log_warn_errno_tcp(9003, tcp_errno);
 	struct hostent *host_ent;
 	host_ent = gethostbyname(tcp_host_name);
 	if (host_ent==NULL)  perror("");
-	if (host_ent==NULL) return log_warn(903, tcp_errno);
+	if (host_ent==NULL) return log_warn_errno_tcp(9003, tcp_errno);
 	if (host_ent->h_addrtype==AF_INET && host_ent->h_addr!=NULL)
 	if (str_copy(tcp_host_addr, sizeof(tcp_host_addr), inet_ntoa (*(struct in_addr*)host_ent->h_addr))) return 1;
 	return 0;
 }
-
 
 int tcp_socket_create(tcp_socket *sock) {
 	*sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -48,10 +47,9 @@ int tcp_socket_create(tcp_socket *sock) {
 	#else
 		if(sock < 0)
 	#endif
-			return log_error(28, tcp_errno);
+			return log_error_errno_tcp(1028, tcp_errno);
 	return 0;
 }
-
 
 int tcp_connect(tcp_socket sock, char *addr, int port) {
 	struct sockaddr_in sockaddr;
@@ -60,7 +58,7 @@ int tcp_connect(tcp_socket sock, char *addr, int port) {
 	sockaddr.sin_port = htons(port);
 	sockaddr.sin_family = AF_INET;
     if(connect(sock, &sockaddr, sizeof(sockaddr)))
-    	return log_error(43, addr, port, tcp_errno);
+    	return log_error_errno_tcp(1043, tcp_errno, addr, port);
     return 0;
 }
 
@@ -74,30 +72,24 @@ int tcp_bind(tcp_socket sock, char *addr, int port) {
 	sockaddr.sin_port = htons(port);
 	sockaddr.sin_family = AF_INET;
 	if (bind(sock, &sockaddr, sizeof(sockaddr)))
-		return log_error(29, port, tcp_errno);
+		return log_error_errno_tcp(1029, tcp_errno, port);
 	return 0;
 }
 
 int tcp_socket_listen(tcp_socket sock) {
 	if (listen(sock, 10))
-		return log_error(30, tcp_errno);
+		return log_error_errno_tcp(1030, tcp_errno);
 	return 0;
 }
 
 int tcp_socket_accept(tcp_socket socket_listen, tcp_socket *socket_connection) {
-	/*
-	struct sockaddr_in sockaddr;
-	memset(&sockaddr, 0, sizeof(sockaddr));
-	int sockaddr_size = sizeof(sockaddr);
-	*socket_connection = accept(socket_listen, &sockaddr, &sockaddr_size);
-	*/
 	*socket_connection = accept(socket_listen, NULL, NULL);
 	#ifdef _WIN32
 		if (*socket_connection==INVALID_SOCKET)
 	#else
 		if (*socket_connection<0)
 	#endif
-			return log_error(31, tcp_errno);
+			return log_error_errno_tcp(1031, tcp_errno);
 	return 0;
 }
 
@@ -110,7 +102,7 @@ int tcp_set_socket_timeout(tcp_socket sock) {
 		timeout.tv_usec = 0;
 	#endif
 	if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) || setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) )
-		return log_error(32, tcp_errno);
+		return log_error_errno_tcp(1032, tcp_errno);
 	return 0;
 }
 
@@ -123,13 +115,13 @@ int tcp_recv_str(tcp_socket sock, char *str, int str_size) {
 			|| (recv_len<0 && tcp_errno==10060)
 		#endif
 		) {
-			return log_warn(901, TCP_TIMEOUT);
+			return log_warn(9001, TCP_TIMEOUT);
 		}
 		if (recv_len<0) {
-			return log_warn(902, tcp_errno);
+			return log_warn_errno_tcp(9002, tcp_errno);
 		}
 		if (str_len+recv_len>str_size)
-			return log_error(5, str_size, str_len+recv_len);
+			return log_error(1005, str_size, str_len+recv_len);
 		for(; recv_len; recv_len--,str_len++)
 			if (str[str_len]==0) return 0;
 	}
@@ -140,7 +132,7 @@ int tcp_send(tcp_socket sock, char *data, int size) {
 	while (size>0) {
 		int send_len = send(sock, data, size, 0);
 		if (send_len<=0)
-			return log_error(34, tcp_errno);
+			return log_error_errno_tcp(1034, tcp_errno);
 		size -= send_len;
 		data += send_len;
 	}
@@ -155,7 +147,7 @@ int tcp_socket_close(tcp_socket sock) {
 	#else
 		if (close(sock))
 	#endif
-			return log_error(35, tcp_errno);
+			return log_error_errno_tcp(1035, tcp_errno);
 	sock = 0;
 	return 0;
 }
@@ -170,10 +162,10 @@ int tcp_addr_hostname(char *addr, int addr_size, const char *hostname) {
 	hints.ai_protocol = IPPROTO_TCP;
 	int eai_errno;
 	if (eai_errno=getaddrinfo(hostname, NULL, &hints, &addr_info))
-		return log_error(93, hostname, "eai_errno", eai_errno);
+		return log_error(1093, hostname, eai_errno, gai_strerror(eai_errno));
 	struct sockaddr_in *saddr_in = addr_info->ai_addr;
 	int res = inet_ntop(addr_info->ai_family, &(saddr_in->sin_addr), addr, addr_size)==NULL;
-	if (res) log_error(93, hostname, "errno", errno);
+	if (res) log_error(1093, errno);
 	freeaddrinfo(addr_info);
 	return res;
 }
@@ -183,7 +175,7 @@ int tcp_unix_socket_create(tcp_socket *sock) {
 		return tcp_socket_create(sock);
 	#else
 		*sock = socket(AF_UNIX, SOCK_STREAM, IPPROTO_IP);
-		if(*sock < 0) return log_error(28, tcp_errno);
+		if(*sock < 0) return log_error_errno_tcp(1028, tcp_errno);
 		return 0;
 	#endif
 }
@@ -221,13 +213,13 @@ int tcp_unix_bind(tcp_socket sock, int port) {
 			return 1;
 		int lock_fd = open(lock_path, O_CREAT, S_IRWXU);
 		if(lock_fd<0)
-			return log_error(8, lock_path, errno);
+			return log_error_errno(1008, tcp_errno, lock_path);
 		if (flock(lock_fd, LOCK_EX|LOCK_NB))
-			return log_error(87, lock_path, errno);
+			return log_error_errno(1087, tcp_errno, lock_path);
 		if (file_remove(saddr.sun_path, 0))
 			return 1;
 		if (bind(sock, &saddr, sizeof(saddr)))
-			return log_error(84, saddr.sun_path, tcp_errno);
+			return log_error_errno_tcp(1084, tcp_errno, saddr.sun_path);
 		log_info("binded to unix socket \"%s\"", saddr.sun_path);
 		return 0;
 	#endif
@@ -241,7 +233,7 @@ int tcp_unix_connect(tcp_socket sock, int port) {
 		if (_tcp_unix_sockaddr_create(&saddr, port))
 			return 1;
 	    if(connect(sock, &saddr, sizeof(saddr)))
-	    	return log_error(85, saddr.sun_path, tcp_errno);
+	    	return log_error_errno_tcp(1085, saddr.sun_path);
 	    return 0;
 	#endif
 }

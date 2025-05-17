@@ -38,12 +38,12 @@ void stream_replace(stream *stream_dest, stream *stream_source) {
 
 int _stream_resize(stream *stream, int size_need) {
 	if (stream->data==NULL)
-		return log_error(51);
+		return log_error(1051);
 	if (stream->len+size_need > stream->size) {
 		int size_alloc = stream->len + size_need + STREAM_SIZE_STEP;
 		char *data_new = malloc(size_alloc);
 		if (data_new==NULL)
-			return log_error(9, size_alloc);
+			return log_error(1009, size_alloc);
 		for (int i=0; i <= stream->len; i++)
 			data_new[i] = stream->data[i];
 		free(stream->data);
@@ -56,7 +56,7 @@ int _stream_resize(stream *stream, int size_need) {
 int stream_add_substr(stream *stream, char *source, int pos_begin, int pos_end) {
 	stream->last_add_str_unescaped = 0;
 	if(pos_begin<0 || pos_end<0 || pos_begin>pos_end)
-		return log_error(54, "stream_add_substr");
+		return log_error(1054);
 	if (_stream_resize(stream, (pos_end - pos_begin) + 1)) return 1;
 	for (int i = pos_begin; i <= pos_end; i++)
 		stream->data[stream->len++] = source[i];
@@ -148,7 +148,7 @@ void stream_list_init(stream_list *stream_list) {
 int stream_list_add_str(stream_list *stream_list, char *name, char *str) {
 	int stream_list_size = sizeof(stream_list->names)/sizeof(stream_list->names[0]);
 	if (stream_list->len+1>=stream_list_size)
-		return log_error(16, stream_list_size);
+		return log_error(1098);
 	if (str_copy(stream_list->names[stream_list->len], sizeof(stream_list->names[0]), name))
 		return 1;
 	if (stream_init(&stream_list->streams[stream_list->len]))

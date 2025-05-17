@@ -14,7 +14,7 @@ int time_interval_str_add(char *str, int str_size, int interval) {
 
 int time_date_str(char *str, int str_size, time_t time) {
 	if (!strftime(str,str_size,"%Y-%m-%d",localtime(&time)))
-		return log_error(5, str_size, 11);
+		return log_error(1005, str_size, 11);
 	return 0;
 }
 

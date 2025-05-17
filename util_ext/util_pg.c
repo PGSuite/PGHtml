@@ -12,7 +12,7 @@ void pg_initialize(char *error_prefix) {
 	if (thread_mem_alloc(&pg_connections, sizeof(pg_connection)*PG_CONNECTIONS_SIZE))
 		log_exit_fatal();
 	for(int i=0; i<PG_CONNECTIONS_SIZE; i++) {
-		thread_mutex_init(&pg_connections[i].mutex, "pg_connections_mutex");
+		thread_mutex_init(&pg_connections[i].mutex);
 		pg_connections[i].index          = i;
 		pg_connections[i].assigned       = 0;
 		pg_connections[i].activity_id[0] = 0;
@@ -36,7 +36,7 @@ int pg_connection_assign(pg_connection **pg_connection, char *uri) {
 			break;
 		}
 	}
-	if (index==PG_CONNECTIONS_SIZE) return log_error(59, PG_CONNECTIONS_SIZE);
+	if (index==PG_CONNECTIONS_SIZE) return log_error(1059, PG_CONNECTIONS_SIZE);
 	PGconn *pg_conn;
 	if (pg_connect(&pg_conn, uri)) {
 		pg_connections[index].assigned = 0;
@@ -75,9 +75,9 @@ int pg_connection_array_sql(stream *array) {
 
 int pg_connection_lock(pg_connection **pg_connection, int index) {
 	if (index<0 || index>=PG_CONNECTIONS_SIZE)
-		return log_error(60, index);
+		return log_error(1060, index);
 	thread_mutex_lock(&pg_connections[index].mutex);
-	if (pg_connections[index].assigned!=2) return log_error(71);
+	if (pg_connections[index].assigned!=2) return log_error(1071);
 	*pg_connection = &pg_connections[index];
 	return 0;
 }
@@ -87,7 +87,7 @@ void pg_connection_unlock(pg_connection *pg_connection) {
 }
 
 int pg_connection_check_key(int index, char *key) {
-	if (strcmp(pg_connections[index].key,key)) return log_error(65);
+	if (strcmp(pg_connections[index].key,key)) return log_error(1065);
 	return 0;
 }
 
@@ -144,7 +144,7 @@ int pg_connect(PGconn **pg_conn, char *uri) {
 	log_info("connecting to database, URI: %s", uri_masked);
 	*pg_conn = PQconnectdb(uri);
     if (PQstatus(*pg_conn) != CONNECTION_OK)  {
-    	log_error(62, PQerrorMessage(*pg_conn));
+    	log_error(1062, PQerrorMessage(*pg_conn));
     	PQfinish(*pg_conn);
     	*pg_conn = NULL;
     	return 1;
@@ -175,28 +175,28 @@ int pg_str_to_bool(char *value) {
 int pg_check_result(PGresult *pg_result, const char *query, int return_data) {
 	int pg_result_status = PQresultStatus(pg_result);
 	if (pg_result_status==PGRES_FATAL_ERROR || pg_result_status==PGRES_BAD_RESPONSE) {
-		log_error(19, PQresultErrorField(pg_result, PG_DIAG_SQLSTATE), query, PQresultErrorMessage(pg_result));
+		log_error(1019, PQresultErrorField(pg_result, PG_DIAG_SQLSTATE), query, PQresultErrorMessage(pg_result));
 		PQclear(pg_result);
 		return 1;
 	}
     if (return_data && pg_result_status!=PGRES_TUPLES_OK) {
     	PQclear(pg_result);
-    	return log_error(40, query);
+    	return log_error(1040, query);
     }
 	if ( (return_data==2 || return_data==3) && PQntuples(pg_result)==0) {
 		PQclear(pg_result);
-		return log_error(66, query);
+		return log_error(1066, query);
 	}
 	if (return_data==3 && PQntuples(pg_result)>1) {
 		PQclear(pg_result);
-		return log_error(77, query);
+		return log_error(1077, query);
 	}
 	return 0;
 }
 
 int _pg_execute(PGconn *pg_conn, PGresult **pg_result, int return_data, char *query, int params_len, va_list args) {
 	if (params_len>=PG_SQL_PARAMS_SIZE)
-		return log_error(65, params_len);
+		return log_error(1065, params_len);
 	char *params[PG_SQL_PARAMS_SIZE];
 	for(int i=0; i<params_len; i++)
 		params[i] = va_arg(args, char *);

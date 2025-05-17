@@ -4,7 +4,7 @@
 int template_maker_tag_skip_spaces(char *html, int *pos) {
 	int p = *pos;
 	for(; html[p] && html[p]!='>' && (html[p]==' ' || html[p]=='\t'); p++);
-	if (!html[p]) return log_error(17, '>', *pos);
+	if (!html[p]) return log_error(1017, '>', *pos);
 	*pos = p;
 	return 0;
 }
@@ -12,8 +12,8 @@ int template_maker_tag_skip_spaces(char *html, int *pos) {
 int template_maker_tag_skip_chars(char *html, int *pos, char stop_char) {
 	int p = *pos;
 	for(; html[p] && html[p]!='>' && html[p]!=' ' && html[p]!='\t' && html[p]!=stop_char; p++);
-	if (!html[p]) return log_error(17, '>', *pos);
-	if (stop_char!=0 && html[p]=='>')	return log_error(17, '>', *pos);
+	if (!html[p]) return log_error(1017, '>', *pos);
+	if (stop_char!=0 && html[p]=='>')	return log_error(1017, '>', *pos);
 	*pos = p;
 	return 0;
 }
@@ -31,19 +31,19 @@ int template_maker_html_parse_element(char *html, int pos_begin, int *pos_end, c
 		int name_end = pos-1;
 		if (html[pos]!='=') {
 			if (template_maker_tag_skip_spaces(html, &pos)) return 1;
-			if (html[pos]!='=') return log_error(7, name_end);
+			if (html[pos]!='=') return log_error(1007, name_end);
 		}
 		pos++;
 		char name[STR_SIZE];
 		if (str_substr(name, sizeof(name), html, name_begin, name_end)) return 1;
 		if (template_maker_tag_skip_spaces(html, &pos)) return 1;
-		if (html[pos]=='>')	return log_error(7, name_end);
+		if (html[pos]=='>')	return log_error(1007, name_end);
 		int value_begin = pos;
-		if (html[value_begin]!='"' && html[value_begin]!='\'') return log_error(7, value_begin);
+		if (html[value_begin]!='"' && html[value_begin]!='\'') return log_error(1007, value_begin);
 		for(pos++; html[pos] && html[pos]!=html[value_begin];pos++);
-		if (!html[pos]) return log_error(7, value_begin);
+		if (!html[pos]) return log_error(1007, value_begin);
 		int value_end = pos++;
-		if ( (value_begin==value_end) || (html[value_end]!='"'  && html[value_end]!='\'') ) return log_error(7, value_begin);
+		if ( (value_begin==value_end) || (html[value_end]!='"'  && html[value_end]!='\'') ) return log_error(1007, value_begin);
 		char value[STR_SIZE] = "";
 		if (value_begin+1<value_end && str_substr(value, sizeof(value), html, value_begin+1, value_end-1)) return 1;
 		str_map_put(attributes, name, value);
@@ -52,7 +52,7 @@ int template_maker_html_parse_element(char *html, int pos_begin, int *pos_end, c
 	char tag_end_name[STR_SIZE] = "";
 	if (str_add(tag_end_name, sizeof(tag_end_name), "</", tag, ">", NULL)) return 1;
 	int tag_end_pos = str_find(html, pos, tag_end_name, 0);
-	if (tag_end_pos==-1) return log_error(18, tag_end_name, pos);
+	if (tag_end_pos==-1) return log_error(1018, tag_end_name, pos);
 	stream_clear(body);
 	if (stream_add_substr(body, html, body_begin, tag_end_pos-1)) return 1;
 	*pos_end = tag_end_pos+strlen(tag_end_name)-1;
@@ -179,7 +179,7 @@ int template_maker_include(stream *file, char *directory) {
 
 int template_maker_var_replace(stream *file_dest, stream *file_source, int *pos, stream_list *vars) {
 	int pos_end = str_find(file_source->data, *pos, "}", 0);
-	if (pos_end==-1) return log_error(17, '}', *pos);
+	if (pos_end==-1) return log_error(1017, '}', *pos);
 	int var_len = pos_end-*pos-2;
 	int var_index;
 	for(var_index=0; var_index<vars->len; var_index++) {
@@ -215,12 +215,12 @@ int template_maker_vars(stream *file, stream_list *vars) {
 		}
 		if (strcmp(tag, TAG_PGHTML_VAR)) {
 			stream_free(&value);
-			return log_error(83, tag);
+			return log_error(1083, tag);
 		}
 		int attribute_name_index = str_map_index(&attributes, "name");
 		if (attribute_name_index==-1) {
 			stream_free(&value);
-			return log_error(83, tag);
+			return log_error(1083, tag);
 		}
 		int res = stream_list_add_str(vars, attributes.values[attribute_name_index], value.data);
 		stream_free(&value);

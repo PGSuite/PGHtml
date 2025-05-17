@@ -9,7 +9,7 @@
 int file_read(char *path, stream *file_body) {
     FILE *file = fopen(path,"rb");
 	if(file==NULL)
-		return log_error(8, path, errno);
+		return log_error_errno(1008, errno, path);
 	if (stream_init(file_body)) {
 		fclose(file);
 		return 1;
@@ -18,9 +18,10 @@ int file_read(char *path, stream *file_body) {
 		char buffer[10*1024];
 		int size = fread(buffer, 1, sizeof(buffer), file);
 		if(ferror(file)) {
+			log_error_errno(1010, errno, path);
 			stream_free(file_body);
 			fclose(file);
-			return log_error(10, path);
+			return 1;
 		}
 		if (size>0 && stream_add_substr(file_body, buffer, 0, size-1)) {
 			fclose(file);
@@ -28,8 +29,9 @@ int file_read(char *path, stream *file_body) {
 		}
 	}
     if (fclose(file)) {
+    	log_error_errno(1014, errno, path);
     	stream_free(file_body);
-    	return log_error(14, path);
+    	return 1;
 	}
     return 0;
 }
@@ -37,22 +39,23 @@ int file_read(char *path, stream *file_body) {
 int file_write(char *path, stream *file_body) {
     FILE * file = fopen(path,"wb");
 	if(file==NULL)
-		return log_error(8, path, errno);
+		return log_error_errno(1008, errno, path);
 	int offset = 0;
 	while(offset<file_body->len) {
 		int len = fwrite((file_body->data)+offset, 1, file_body->len-offset, file);
 		if(ferror(file)) {
+			log_error_errno(1012, errno, path);
 			fclose(file);
-			return log_error(12, path);
+			return 1;
 		}
 		if(len==0) {
 			fclose(file);
-			return log_error(13, path);
+			return log_error(1013, path);
 		}
 		offset += len;
 	}
     if (fclose(file))
-    	return log_error(14, path);
+    	return log_error_errno(1014, errno, path);
     return 0;
 }
 
@@ -89,7 +92,7 @@ int file_is_dir(char *path, int *is_dir) {
 			*is_dir = -1;
 			return 0;
 		}
-		return log_error(50, path, errno);
+		return log_error_errno(1050, errno, path);
 	}
 	*is_dir = S_ISDIR(path_stat.st_mode);
 	return 0;
@@ -97,13 +100,13 @@ int file_is_dir(char *path, int *is_dir) {
 
 int file_remove(char *filepath, int remove_empty_dir) {
 	if (remove(filepath))
-		if(errno!=2) return log_error(78, filepath, errno);
+		if(errno!=2) return log_error_errno(1078, errno, filepath);
 	if (remove_empty_dir) {
 		char dir[STR_SIZE];
 		if (file_dir(dir, sizeof(dir), filepath))
 			return 1;
 		if (rmdir(dir))
-			if(errno!=39 && errno!=41) return log_error(79, dir, errno);
+			if(errno!=39 && errno!=41) return log_error_errno(1079, errno, dir);
 	}
 	return 0;
 }
@@ -157,7 +160,7 @@ int file_make_dirs(char *path, int is_file) {
 			int res = mkdir(dir, 0755);
 		#endif
 		if (res!=0)
-			return log_error(49, dir, errno);
+			return log_error_errno(1049, errno, dir);
 	}
 	return 0;
 }

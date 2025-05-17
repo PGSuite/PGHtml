@@ -63,24 +63,24 @@ int main(int argc, char *argv[])
 
 	for(int i=2; i<argc; i++) {
 		if (argv[i][0]!='-') {
-			log_error(41, argv[i]);
+			log_error(1041, argv[i]);
 			exit(3);
 		}
 		if (i==argc-1) {
-			log_error(2, argv[i]);
+			log_error(1002, argv[i]);
 			exit(3);
 		}
 		if (strcmp(argv[i],"-hd")==0) http_directory=argv[++i];
 		else if (strcmp(argv[i],"-hi")==0) {
 			http_sync_interval = atoi(argv[++i]);
 			if (http_sync_interval<=0) {
-				log_error(4, argv[i]);
+				log_error(1100, "HTTP synchronization interval", argv[i]);
 				exit(3);
 			}
 		} else if (strcmp(argv[i],"-hp")==0) {
 			http_port = atoi(argv[++i]);
 			if (http_port<=0) {
-				log_error(42, argv[i]);
+				log_error(1042, argv[i]);
 				exit(3);
 			}
 		}
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 		else if (strcmp(argv[i],"-W")==0)  db_service_password=argv[++i];
 		else if (strcmp(argv[i],"-l")==0)  log_file = argv[++i];
 		else {
-			log_error(3, argv[i]);
+			log_error(1003, argv[i]);
 			exit(3);
 		}
 	}
@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
 	admin_check_command(argc, argv, http_port, (char *[]) {"status", NULL}, (admin_command_function_t *[]) {admin_status, NULL});
 
 	if (strcmp(argv[1],"execute") && strcmp(argv[1],"sync")) {
-		log_error(39, argv[1]);
+		log_error(1039, argv[1]);
 		exit(3);
 	}
 

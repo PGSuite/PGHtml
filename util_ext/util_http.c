@@ -27,7 +27,7 @@ int _http_recv_var(tcp_socket socket_connection, char *buffer, int buffer_len, i
 			return 0;
 		}
 		if (*var_len+2>var_size) {
-			log_error(5, var_size, *var_len+2);
+			log_error(1005, var_size, *var_len+2);
 			http_send_error(socket_connection, HTTP_STATUS_INTERNAL_ERROR);
 			return 1;
 		}
@@ -54,9 +54,9 @@ int http_recv_request(tcp_socket socket_connection, http_request *request) {
 			|| (buffer_len<0 && tcp_errno==10060)
 		#endif
 		)
-			return log_warn(901, TCP_TIMEOUT);
+			return log_warn(9001, TCP_TIMEOUT);
 		if (buffer_len<0)
-			return log_warn(902, tcp_errno);
+			return log_warn_errno_tcp(9002, tcp_errno);
 		int i=0;
 		if (!received_method   && _http_recv_var(socket_connection, buffer, buffer_len, &i, ' ',  &request->method,   &var_len, sizeof(request->method),   &received_method))   return 1;
 		if (!received_path     && _http_recv_var(socket_connection, buffer, buffer_len, &i, ' ',  &request->path,     &var_len, sizeof(request->path),     &received_path))     return 1;
